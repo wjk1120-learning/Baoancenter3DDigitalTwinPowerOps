@@ -16,7 +16,7 @@
 - [x] 数学对拍通过（src/power-room/layout.mjs vs 旧 circuit.ts）
 - [x] 现场采集表模板（docs/配电房摆柜信息采集表.xlsx + 生成脚本）
 - [x] 模块开发文档 ×2（配电房 + 楼栋，docs/）
-- [ ] 目录改名：hospital-twin-next → Baoancenter3DDigitalTwinPowerOps（等关闭占用该目录的程序后执行）
+- [x] 目录改名：hospital-twin-next → Baoancenter3DDigitalTwinPowerOps（2026-10-28 完成）
 - [ ] Vite + Vue3 骨架
 - [ ] 登录对接 / HTTP / WS（照搬旧项目）
 - [ ] 3D（复制旧 three/ 改造，福永模型当替身）

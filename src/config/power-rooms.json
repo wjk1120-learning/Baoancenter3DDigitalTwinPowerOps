@@ -1,5 +1,5 @@
 {
-  "$comment": "配电房图纸配置。数据 = 福永运行时模板 circuit:g2（LV2+LV2_AA9 合并，见对拍 fixtures/layout-g2.expected.json），fyCode 为台账真实值。校验：node scripts/check-power-rooms.mjs",
+  "$comment": "配电房图纸配置。数据 = 福永运行时模板 circuit:g2（LV2+LV2_AA9 合并，见对拍 fixtures/layout-g2.expected.json），devCode 为台账真实值。校验：node scripts/check-power-rooms.mjs",
   "pitch": 1.32,
   "rooms": [
     {
@@ -8,20 +8,20 @@
       "diagramTitle": "新大楼低压配电房2#变低压主接线图",
       "rows": [
         [
-          { "code": "2AA1", "name": "2AA1 进线柜", "spec": "400V进线及计量柜", "model": "jinxian", "fyCode": "FY000151" },
-          { "code": "2AAC1", "name": "2AAC1 无功补偿柜", "spec": "无功补偿柜", "model": "dianrongui", "fyCode": "FY000152" },
-          { "code": "2AA2", "name": "2AA2 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000153" },
-          { "code": "2AA3", "name": "2AA3 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000154" },
-          { "code": "2AA4", "name": "2AA4 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000155" },
-          { "code": "2AA9", "name": "2AA9 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000160" }
+          { "code": "2AA1", "name": "2AA1 进线柜", "spec": "400V进线及计量柜", "model": "jinxian", "devCode": "FY000151" },
+          { "code": "2AAC1", "name": "2AAC1 无功补偿柜", "spec": "无功补偿柜", "model": "dianrongui", "devCode": "FY000152" },
+          { "code": "2AA2", "name": "2AA2 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000153" },
+          { "code": "2AA3", "name": "2AA3 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000154" },
+          { "code": "2AA4", "name": "2AA4 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000155" },
+          { "code": "2AA9", "name": "2AA9 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000160" }
         ],
         [
-          { "code": "2AA5", "name": "2AA5 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000156" },
-          { "code": "2AA6", "name": "2AA6 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000157" }
+          { "code": "2AA5", "name": "2AA5 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000156" },
+          { "code": "2AA6", "name": "2AA6 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000157" }
         ],
         [
-          { "code": "2AA7", "name": "2AA7 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000158" },
-          { "code": "2AA8", "name": "2AA8 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "fyCode": "FY000159" }
+          { "code": "2AA7", "name": "2AA7 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000158" },
+          { "code": "2AA8", "name": "2AA8 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000159" }
         ]
       ]
     }

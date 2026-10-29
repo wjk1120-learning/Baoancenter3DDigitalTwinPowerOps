@@ -9,8 +9,8 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const MODELS = ['jinxian', 'dianrongui', 'peidiangui', 'shuangdianyuan', 'kaiguan']
-const FY_RE = /^FY\d{6}$/
+const MODELS = ['jinxian', 'dianrongui', 'peidiangui', 'shuangdianyuan'] // 一级柜体 4 种；kaiguan=柜下开关专用模型（二级设备），不进一级枚举
+const DEV_CODE_RE = /^[A-Z]{2}\d{6}$/
 
 const target =
   process.argv[2] ?? fileURLToPath(new URL('../src/config/power-rooms.json', import.meta.url))
@@ -73,11 +73,11 @@ const roomIds = new Set()
 
       if (!cab?.model) fail(tag, at, 'model 必填（柜体选型）')
       else if (!MODELS.includes(cab.model))
-        fail(tag, at, `model「${cab.model}」不在 5 种柜体枚举内：${MODELS.join(' / ')}`)
+        fail(tag, at, `model「${cab.model}」不在 4 种柜体枚举内：${MODELS.join(' / ')}`)
 
-      if (cab?.fyCode != null && cab.fyCode !== '') {
-        if (typeof cab.fyCode !== 'string' || !FY_RE.test(cab.fyCode))
-          fail(tag, at, `fyCode「${cab.fyCode}」不符合 FY+6位数字 规则（如 FY000151）`)
+      if (cab?.devCode != null && cab.devCode !== '') {
+        if (typeof cab.devCode !== 'string' || !DEV_CODE_RE.test(cab.devCode))
+          fail(tag, at, `devCode「${cab.devCode}」不符合 两位大写字母+6位数字 规则（宝安 BZ000001 / 福永 FY000151）`)
       }
 
       if (cab?.nudgeX != null && typeof cab.nudgeX !== 'number')
