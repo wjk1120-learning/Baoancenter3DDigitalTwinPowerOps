@@ -9,7 +9,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { computePowerRoomLayout } from '../src/power-room/layout.mjs'
+import { computePowerRoomLayout } from '../src/power-room/layout.ts'
 
 const EPS = 1e-9
 const config = JSON.parse(

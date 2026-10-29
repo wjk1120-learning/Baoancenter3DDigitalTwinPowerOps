@@ -1,5 +1,5 @@
 {
-  "name": "baoancenter3ddigitaltwinpowerops",
+  "name": "baoancenter-3d-digital-twin-power-ops",
   "version": "1.0.0",
   "description": "宝安中心医院 3D 孪生电力运维平台。以福永项目（../Fuyong3DDigitalTwinPowerOps）为蓝本**参照式重写**：结构照搬、债务清偿、每层与旧项目对拍验证。",
   "main": "index.js",
@@ -7,7 +7,13 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "convert": "node scripts/excel-to-rooms.mjs",
+    "check": "node scripts/check-power-rooms.mjs",
+    "parity": "node scripts/parity-layout.mjs",
+    "gen:template": "python scripts/gen-cabinet-template.py"
   },
   "repository": {
     "type": "git",
@@ -16,12 +22,23 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/wjk1120-learning/Baoancenter3DDigitalTwinPowerOps/issues"
   },
   "homepage": "https://github.com/wjk1120-learning/Baoancenter3DDigitalTwinPowerOps#readme",
   "dependencies": {
+    "three": "^0.186.1",
+    "vue": "^3.5.44",
     "xlsx": "^0.18.5"
-  }
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.13"
+  },
+  "private": true
 }
