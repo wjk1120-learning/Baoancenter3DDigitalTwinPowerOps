@@ -8,20 +8,305 @@
       "diagramTitle": "新大楼低压配电房2#变低压主接线图",
       "rows": [
         [
-          { "code": "2AA1", "name": "2AA1 进线柜", "spec": "400V进线及计量柜", "model": "jinxian", "devCode": "FY000151" },
-          { "code": "2AAC1", "name": "2AAC1 无功补偿柜", "spec": "无功补偿柜", "model": "dianrongui", "devCode": "FY000152" },
-          { "code": "2AA2", "name": "2AA2 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000153" },
-          { "code": "2AA3", "name": "2AA3 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000154" },
-          { "code": "2AA4", "name": "2AA4 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000155" },
-          { "code": "2AA9", "name": "2AA9 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000160" }
+          {
+            "code": "2AA1",
+            "name": "2AA1 进线柜",
+            "spec": "400V进线及计量柜",
+            "model": "jinxian",
+            "devCode": "FY000151"
+          },
+          {
+            "code": "2AAC1",
+            "name": "2AAC1 无功补偿柜",
+            "spec": "无功补偿柜",
+            "model": "dianrongui",
+            "devCode": "FY000152"
+          },
+          {
+            "code": "2AA2",
+            "name": "2AA2 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000153"
+          },
+          {
+            "code": "2AA3",
+            "name": "2AA3 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000154"
+          },
+          {
+            "code": "2AA4",
+            "name": "2AA4 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000155"
+          },
+          {
+            "code": "2AA9",
+            "name": "2AA9 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000160"
+          }
         ],
         [
-          { "code": "2AA5", "name": "2AA5 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000156" },
-          { "code": "2AA6", "name": "2AA6 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000157" }
+          {
+            "code": "2AA5",
+            "name": "2AA5 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000156"
+          },
+          {
+            "code": "2AA6",
+            "name": "2AA6 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000157"
+          }
         ],
         [
-          { "code": "2AA7", "name": "2AA7 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000158" },
-          { "code": "2AA8", "name": "2AA8 馈线柜", "spec": "400V馈线柜", "model": "peidiangui", "devCode": "FY000159" }
+          {
+            "code": "2AA7",
+            "name": "2AA7 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000158"
+          },
+          {
+            "code": "2AA8",
+            "name": "2AA8 馈线柜",
+            "spec": "400V馈线柜",
+            "model": "peidiangui",
+            "devCode": "FY000159"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-1",
+      "name": "1#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "P01/T1",
+            "name": "P01/T1 进线柜",
+            "model": "jinxian",
+            "devCode": "BZ000021"
+          }
+        ],
+        [
+          {
+            "code": "P02/T1",
+            "name": "P02/T1 电容柜",
+            "model": "dianrongui",
+            "devCode": "BZ000022"
+          },
+          {
+            "code": "P04/T1",
+            "name": "P04/T1 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P05/T1",
+            "name": "P05/T1 配电柜",
+            "model": "peidiangui"
+          }
+        ],
+        [
+          {
+            "code": "P06/T1",
+            "name": "P06/T1 配电柜",
+            "model": "peidiangui"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-2",
+      "name": "2#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "P11/T2",
+            "name": "P11/T2 配电柜",
+            "model": "peidiangui"
+          }
+        ],
+        [
+          {
+            "code": "P10/T2",
+            "name": "P10/T2 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P08/T2",
+            "name": "P08/T2 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P07/T2",
+            "name": "P07/T2 配电柜",
+            "model": "peidiangui"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-3",
+      "name": "3#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "P01/T3",
+            "name": "P01/T3 进线柜",
+            "model": "jinxian"
+          }
+        ],
+        [
+          {
+            "code": "P02/T3",
+            "name": "P02/T3 电容柜",
+            "model": "dianrongui"
+          },
+          {
+            "code": "P04/T3",
+            "name": "P04/T3 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P05/T3",
+            "name": "P05/T3 配电柜",
+            "model": "peidiangui"
+          }
+        ],
+        [
+          {
+            "code": "P06/T3",
+            "name": "P06/T3 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P07/T3",
+            "name": "P07/T3 配电柜",
+            "model": "peidiangui"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-4",
+      "name": "4#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "P01/T4",
+            "name": "P01/T4 进线柜",
+            "model": "jinxian"
+          }
+        ],
+        [
+          {
+            "code": "P02/T4",
+            "name": "P02/T4 电容柜",
+            "model": "dianrongui"
+          },
+          {
+            "code": "P04/T4",
+            "name": "P04/T4 配电柜",
+            "model": "peidiangui"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-5",
+      "name": "5#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "1P01",
+            "name": "1P01 进线柜",
+            "model": "jinxian"
+          }
+        ],
+        [
+          {
+            "code": "1P02",
+            "name": "1P02 电容柜",
+            "model": "dianrongui"
+          },
+          {
+            "code": "1P03",
+            "name": "1P03 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "1P04",
+            "name": "1P04 配电柜",
+            "model": "peidiangui"
+          }
+        ],
+        [
+          {
+            "code": "1P05",
+            "name": "1P05 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "1P06",
+            "name": "1P06 配电柜",
+            "model": "peidiangui"
+          }
+        ]
+      ]
+    },
+    {
+      "id": "room-6",
+      "name": "6#变低压配电房",
+      "rows": [
+        [
+          {
+            "code": "P01/T4",
+            "name": "P01/T4 进线柜",
+            "model": "jinxian"
+          }
+        ],
+        [
+          {
+            "code": "2P03",
+            "name": "2P03 电容柜",
+            "model": "dianrongui"
+          },
+          {
+            "code": "2P04",
+            "name": "2P04 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "2P05",
+            "name": "2P05 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "2P06",
+            "name": "2P06 配电柜",
+            "model": "peidiangui"
+          }
+        ],
+        [
+          {
+            "code": "2P07",
+            "name": "2P07 配电柜",
+            "model": "peidiangui"
+          },
+          {
+            "code": "P06",
+            "name": "P06 配电柜",
+            "model": "peidiangui"
+          }
         ]
       ]
     }

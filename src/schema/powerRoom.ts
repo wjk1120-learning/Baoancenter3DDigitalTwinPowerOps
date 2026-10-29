@@ -2,14 +2,14 @@
 
 /**
  * 柜体模型枚举（一级大柜，共 4 种）——新医院柜型不同时在此扩展，并同步 check-power-rooms.mjs 的 MODELS。
- * 业务口径（2026-10-29 用户确认）：进线柜也叫馈线柜，同一种柜。
- * 注：kaiguan.glb 不是柜体类型，是挂在大柜下的「二级开关单元」模型（旧项目 smallUnitModel.ts），
- * 若新项目做小柜功能才引入，勿加入本枚举。
+ * 业务口径（2026-10-29 用户确认）：进线柜、馈线柜、联络柜是三种类型，共用 jinxian 一个模型。
+ * 注：kaiguan.glb 不进本枚举——它是挂在大柜下的「二级开关单元」模型（旧项目 smallUnitModel.ts）。
+ * 高压柜专用模型建模中：建模完成后在转换脚本加映射行、枚举加新模型名；此前转换遇高压柜警告跳过。
  */
 export type CabinetModel =
-  | 'jinxian' // 进线柜（= 馈线柜）
+  | 'jinxian' // 进线柜 / 馈线柜 / 联络柜（三种类型共用）
   | 'shuangdianyuan' // 双电源切换柜
-  | 'dianrongui' // 电容柜 / 无功补偿柜
+  | 'dianrongui' // 电容(补偿)柜
   | 'peidiangui' // 配电柜（默认）
 
 export interface CabinetConfig {

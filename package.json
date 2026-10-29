@@ -1,0 +1,27 @@
+{
+  "name": "baoancenter3ddigitaltwinpowerops",
+  "version": "1.0.0",
+  "description": "宝安中心医院 3D 孪生电力运维平台。以福永项目（../Fuyong3DDigitalTwinPowerOps）为蓝本**参照式重写**：结构照搬、债务清偿、每层与旧项目对拍验证。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wjk1120-learning/Baoancenter3DDigitalTwinPowerOps.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wjk1120-learning/Baoancenter3DDigitalTwinPowerOps/issues"
+  },
+  "homepage": "https://github.com/wjk1120-learning/Baoancenter3DDigitalTwinPowerOps#readme",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

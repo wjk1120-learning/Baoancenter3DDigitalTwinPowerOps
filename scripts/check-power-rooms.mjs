@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const MODELS = ['jinxian', 'dianrongui', 'peidiangui', 'shuangdianyuan'] // 一级柜体 4 种；kaiguan=柜下开关专用模型（二级设备），不进一级枚举
+const MODELS = ['jinxian', 'dianrongui', 'peidiangui', 'shuangdianyuan'] // 与 schema/powerRoom.ts CabinetModel 保持一致；kaiguan 是二级开关单元模型不在此列，高压柜模型到位后两处同步加
 const DEV_CODE_RE = /^[A-Z]{2}\d{6}$/
 
 const target =
