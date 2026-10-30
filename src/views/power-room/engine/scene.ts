@@ -8,7 +8,6 @@
  * - 模型模板模块级缓存：同类柜整个应用周期只加载+归一化一次，摆柜用 clone；
  * - 分批建柜（每帧 2 台，福永 BUILD_BATCH 同款），建柜期间相机停远景、关投影；
  * - 建完：柜体 scale.y 以 backOut 0.45s 弹出 + 相机从 1.6 倍远景 lerp 飞入，
- *   到位后开 0.55 缓慢自转，用户一拖拽即停；
  * - 机位角度全抄福永 focusLayout：FOV 42、俯仰 17°、偏航 12°，并按柜群包围盒
  *   投影取景（只放大不拉远，放大上限 15%，circuitFitZoom 同款算法）。
  */
@@ -138,7 +137,13 @@ function loadProto(model: CabinetModel): Promise<THREE.Group | null> {
         holder.add(inner)
         return holder
       })
-      .catch(() => null)
+      .catch((err) => {
+        // 失败不缓存：删掉缓存条目，下次切房重试（福永 bigUnitModel 同款）；
+        // 仍返回 null，同房其余柜子继续摆
+        protoCache.delete(model)
+        console.warn(`[PowerRoomScene] 模型 ${model} 加载失败，切房将重试`, err)
+        return null
+      })
     protoCache.set(model, p)
   }
   return p
@@ -324,7 +329,7 @@ export function createPowerRoomScene(
       (list) => {
         if (gen !== buildGen) return
         const protoOf = new Map<CabinetModel, THREE.Group | null>()
-        ;[...new Set(cabinets.map((c) => c.model))].forEach((m, i) => protoOf.set(m, list[i] ?? null))
+          ;[...new Set(cabinets.map((c) => c.model))].forEach((m, i) => protoOf.set(m, list[i] ?? null))
 
         let cursor = 0
         function buildBatch() {
@@ -411,19 +416,19 @@ export function createPowerRoomScene(
     // 仅供 src/tests 调试页读取（opts.debug 才有）
     ...(opts.debug
       ? {
-          debug: {
-            content,
-            camera,
-            controls,
-            state: () => ({
-              busBuilt: !!bus,
-              entrants: entrants.length,
-              entranceAt,
-              animating,
-              buildGen,
-            }),
-          },
-        }
+        debug: {
+          content,
+          camera,
+          controls,
+          state: () => ({
+            busBuilt: !!bus,
+            entrants: entrants.length,
+            entranceAt,
+            animating,
+            buildGen,
+          }),
+        },
+      }
       : {}),
     dispose() {
       buildGen += 1
@@ -431,7 +436,7 @@ export function createPowerRoomScene(
       window.removeEventListener('resize', onResize)
       clearContent()
       floor.geometry.dispose()
-      ;(floor.material as THREE.Material).dispose()
+        ; (floor.material as THREE.Material).dispose()
       grid.dispose()
       controls.dispose()
       renderer.dispose()

@@ -6,8 +6,6 @@ import type { PowerRoomConfig } from '../data/powerRoom'
  * 规则：
  *   - 排号 r（0 起）：z = (r - (排数-1)/2) * BAND_GAP
  *   - 排内从左到右：x 起点 -rowW/2，每台 cx = x + pitch/2 + nudgeX，下一台 x += pitch
- *
- * 对拍：node scripts/parity-layout.mjs（vs fixtures/layout-g2.expected.json）
  */
 
 /** 排间距（米），与福永 BAND_GAP 一致 */

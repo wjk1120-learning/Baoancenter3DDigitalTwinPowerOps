@@ -45,3 +45,5 @@
 | 2026-10-30 | 调试设施按用户新规收进 src/tests：debug-power-room.html 调试页（含 GLB 自检），scene.ts 只留 opts.debug 可选出口返回内部状态，生产路径零调试代码 | 用户明示「调试/测试都放 src/tests」；切房清理改为只释放每房独占的名牌贴图，不再 dispose 与模板共享的几何/材质 |
 | 2026-10-30 | 名牌照抄福永 util.ts makeNameLabel：bold 26px、纯白底+蓝描边(#0f2438 文字)、LinearFilter 无 mipmap、世界高 0.58m（原自绘版 28px 非粗体/半透明底/mipmap 过滤 → 淡且糊） | 用户指出「名字很淡看不清」；柜顶间距取福永 addNameTag 的 0.55 |
 | 2026-10-30 | typescript 7.0.2 → 5.9.3（用户批准的 devDependency 降级）：vue-tsc 3.3.13 恢复可用，首次全量 .vue 类型检查零错误，npm run build（vue-tsc -b && vite build）首次跑通 | TS7×vue-tsc ERR_PACKAGE_PATH_NOT_EXPORTED 悬案关闭；构建产物 three 主 chunk 642KB 超提示线属提示不属错误，与福永同量级 |
+| 2026-10-30 | 模型加载失败不再缓存：loadProto 失败时 protoCache.delete 后仍返回 null（同房其余柜照摆），下次切房重试，错误详情进 console.warn | diff 审查发现 catch(()=>null) 把失败结果也缓存住，一次网络抖动该柜整会话缺失只能刷新；福永 bigUnitModel.ts 同为失败不缓存 |
+| 2026-10-30 | parity 布局对拍退役：删 scripts/parity-layout.mjs、package.json 的 parity 命令、文档/注释残留引用（fixtures 两个 json 用户已先行删除） | fixtures 已删，对拍脚本必挂；布局已稳定对拍通过，脚本使命结束。decisions.md 此前对拍条目为历史记录不回改 |

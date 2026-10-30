@@ -8,7 +8,6 @@
     "preview": "vite preview",
     "convert": "node scripts/excel-to-rooms.mjs",
     "check": "node scripts/check-power-rooms.mjs",
-    "parity": "node scripts/parity-layout.mjs",
     "gen:template": "python scripts/gen-cabinet-template.py"
   },
   "repository": {
