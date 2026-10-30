@@ -15,17 +15,13 @@ const EPS = 1e-9
 const config = JSON.parse(
   readFileSync(fileURLToPath(new URL('../src/config/power-rooms.json', import.meta.url)), 'utf8'),
 )
+// 对拍输入房：福永 g2 样本（运行时配置已不含它，专存于 fixtures，避免污染宝安真实数据）
+const room = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../fixtures/room-g2.sample.json', import.meta.url)), 'utf8'),
+)
 const expected = JSON.parse(
   readFileSync(fileURLToPath(new URL('../fixtures/layout-g2.expected.json', import.meta.url)), 'utf8'),
 )
-
-// 旧标准答案的 circuitId（如 circuit:g2）→ 新配置的房 id（g2）
-const roomId = expected.circuit.replace(/^circuit:/, '')
-const room = config.rooms.find((r) => r.id === roomId)
-if (!room) {
-  console.error(`✗ 配置中找不到房 id「${roomId}」（对拍对象缺失）`)
-  process.exit(1)
-}
 
 const actual = computePowerRoomLayout(room, config.pitch)
 
