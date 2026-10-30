@@ -35,3 +35,6 @@
 | 2026-10-29 | 母线排间下落点修正：xDrop = max(本排末柜x, 下一排末柜x) + 0.9 | 福永各排等宽（模板拼接）不暴露；宝安排宽任意（room-1 为 1/3/1 台），原「本排末柜+0.9」使下排更靠右的柜落到竖线右侧（用户截图指出 P05/T1） |
 | 2026-10-29 | 对拍样本房 g2 移出 src/config/power-rooms.json，专存 fixtures/room-g2.sample.json（parity-layout.mjs 改读 fixtures） | 用户指出「新大楼配电房2#」混进宝安房间列表=数据污染；对拍锚点与运行时数据分离，页面/统计只认真实 6 房 31 台 |
 | 2026-10-29 | 目录重构为模块自治：src/views/power-room/ 下收页面+独有组件(CategoryPanel)+engine(layout/scene/bus)+data(power-rooms.json/powerRoom.ts)；全局只留 styles，api/router/store 等到用时再建 | 用户定调「按模块分类，数据、独有组件归模块目录」（参照 OpsPlatform 分层）；对拍脚本同步改读新路径 |
+| 2026-10-30 | 配色以用户自福永整份搬来的 src/styles/theme.css（+naiveTheme.ts）为唯一基准，global.css 撤销（用户删） | 用户定调「配色按福永的来」；theme.css 同时含 reset/字体/浅色渐变底，无需叠加层 |
+| 2026-10-30 | 顶部栏移植：TopBar+PageTabs+store/pageTabs（无 pinia 模块单例）+navConfig（医院总览占位/配电房实页），App.vue 壳内 v-if 切视图；NDropdown 换自写下拉、暂无用户名/退出（等登录移植）；logo 用福永图占位；naiveTheme.ts 在 tsconfig 暂排除（naive-ui 未装） | 用户要求「顶部tab栏也拉来」；缺的三个依赖用等价轻实现顶上，后续引 pinia/router/naive-ui 时逐个替换不动视觉 |
+| 2026-10-30 | App.vue 加 1920×1080 舞台等比缩放居中（scale=min(内宽/1920,内高/1080)，ResizeObserver 监听），福永 App.vue 同款机制原样搬运 | 用户指出「福永的没那么大、宝安的这么大」：福永整套 UI 画在固定 1920×1080 上整体缩小，宝安原生像素直出致 80px 顶栏/24px 标题显大；实测 1600×900 视口缩放 0.833、顶栏占 7.4% 与福永 80/1080 一致 |

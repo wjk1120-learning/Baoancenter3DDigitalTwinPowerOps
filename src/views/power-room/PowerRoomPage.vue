@@ -51,7 +51,7 @@ onUnmounted(() => scene?.dispose())
 }
 .status-pill {
   position: absolute;
-  top: 14px;
+  top: calc(var(--topbar-height) + 14px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;

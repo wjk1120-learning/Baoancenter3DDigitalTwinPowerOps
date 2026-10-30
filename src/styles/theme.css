@@ -1,0 +1,767 @@
+/* ================= 设计令牌（依据 DESIGN.md） ================= */
+:root {
+  /* 背景 / 面板 */
+  --bg-1: #f6fafd;
+  --bg-2: #eaf3fa;
+  --panel: rgba(255, 255, 255, 0.72);
+  --panel-solid: #ffffff;
+  --border: #d6e4f5;
+  --border-strong: #b9cee9;
+
+  /* 文字 */
+  --title: #1f3a5f;
+  --text: #33485f;
+  --muted: #5d7189;
+
+  /* 主色 医疗蓝 */
+  --primary: #2b7ce3;
+  --on-primary: #ffffff;
+  --primary-50: #eaf3fb;
+  --primary-100: #d6e8f7;
+  --primary-200: #afceef;
+  --primary-300: #7fb0e8;
+  --primary-400: #5295e8;
+  --primary-600: #1c62b8;
+  --primary-700: #174e93;
+  --primary-800: #14395f;
+
+  /* 辅色 湖水青（流动 / 装饰 / 用电，不作小号文字） */
+  --teal: #17a2b8;
+  --cyan-light: #4cd0e8;
+  --cyan-deep: #0e7a8e;
+
+  /* 能源绿（仅能源/节能语义，绝不用于设备正常状态） */
+  --energy: #2fa36b;
+  --energy-light: #52c58f;
+  --energy-deep: #1f7a4d;
+  --energy-bg: #f0f9f3;
+
+  /* 状态色（蓝=正常 / 琥珀=告警 / 红=故障） */
+  --ok: #2b7ce3;
+  --ok-text: #174e93;
+  --warn: #f5a623;
+  --warn-text: #9a6a00;
+  --danger: #e5484d;
+  --danger-text: #c2333a;
+
+  /* 字体（思源黑体 + JetBrains Mono） */
+  --font-sans:
+    'Source Han Sans SC', '思源黑体', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Source Han Sans SC', 'Microsoft YaHei', monospace;
+
+  /* 布局间距 */
+  --stack-sm: 8px;
+  --stack-md: 16px;
+  --stack-lg: 32px;
+  --gutter: 16px;
+  --panel-padding: 20px;
+  --container-margin: 24px;
+  --topbar-height: 80px;
+  /* 顶部浮层高度，HospitalPage 面板需避开 */
+
+  /* 其他 */
+  --shadow: 0 24px 48px rgba(43, 108, 160, 0.14), 0 8px 18px rgba(43, 108, 160, 0.08);
+  --card-shadow: 0 2px 8px rgba(43, 108, 160, 0.06);
+  --radius: 14px;
+  --radius-lg: 30px;
+  --radius-sm: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+  background:
+    radial-gradient(1100px 620px at 12% -8%, rgba(76, 208, 232, 0.1), transparent 60%),
+    radial-gradient(900px 560px at 100% 110%, rgba(43, 124, 227, 0.09), transparent 60%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-2));
+  background-attachment: fixed;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 数值统一用等宽字体，防止实时刷新时数字跳动 */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 玻璃态面板 */
+.glass-panel {
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+
+/* ============ Liquid Glass 卡片（Apple Liquid Glass / WWDC 2025） ============ */
+.glass-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.4));
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 24px 48px rgba(43, 108, 160, 0.14),
+    0 8px 18px rgba(43, 108, 160, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -8px 24px rgba(82, 149, 232, 0.06);
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1.2),
+    box-shadow 0.35s;
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 32px 64px rgba(43, 108, 160, 0.18),
+    0 12px 24px rgba(43, 108, 160, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -8px 24px rgba(82, 149, 232, 0.08);
+}
+
+/* 彩虹折射边缘（克制版，装饰不掩盖信息） */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 210deg at 50% 0%,
+    rgba(82, 149, 232, 0.55),
+    rgba(76, 208, 232, 0.35),
+    rgba(82, 149, 232, 0.12),
+    rgba(82, 149, 232, 0.45),
+    rgba(76, 208, 232, 0.25),
+    rgba(82, 149, 232, 0.55)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 顶部玻璃反射 */
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 46%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at top, rgba(255, 255, 255, 0.65), transparent 72%);
+  pointer-events: none;
+}
+
+/* 卡片头：图标块 + 标题 + 右侧次要说明 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.card-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-400), var(--primary));
+  box-shadow: 0 4px 10px rgba(43, 108, 160, 0.24);
+}
+
+.card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--title);
+  letter-spacing: 0.3px;
+}
+
+.card-sub {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.card-sub:hover {
+  color: var(--primary);
+  background: rgba(43, 108, 160, 0.1);
+}
+
+.card-sub:active {
+  transform: scale(0.97);
+}
+
+/* 区块标题左竖线 */
+.section-accent {
+  border-left: 2px solid var(--primary);
+  padding-left: 12px;
+}
+
+/* 统一返回按钮（设备建模页 / 医院聚焦：蓝底白字，悬停白底蓝字） */
+.back-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(43, 108, 160, 0.18);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s,
+    transform 0.12s;
+}
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--primary);
+  border-color: var(--primary);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.back-btn:active {
+  transform: scale(0.97);
+}
+.back-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 告警滚动 */
+.auto-scroll {
+  animation: scroll-up 24s linear infinite;
+}
+
+@keyframes scroll-up {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+/* 青色呼吸点 */
+.pulse-teal {
+  animation: pulse-teal 2s infinite;
+}
+
+@keyframes pulse-teal {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============ 3D 场景标签（CSS2DRenderer） ============ */
+.three-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--title);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1.3;
+  box-shadow: 0 1px 4px rgba(43, 108, 160, 0.12);
+}
+
+.three-label.point-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.three-label.building-label {
+  transform: translateX(-50%);
+  width: 150px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 19px;
+  color: #dc2626;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 14px rgba(43, 108, 160, 0.12);
+}
+.three-label.building-label .bld-energy {
+  display: block;
+  margin-top: 3px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 配电房告警：浮在 3 号楼能耗牌上方，按最高级红/琥珀呼吸 */
+.three-label.building-label .bld-pr-alarm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: calc(100% + 8px);
+  margin: -2px -4px 6px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(232, 168, 56, 0.5);
+  pointer-events: auto;
+  cursor: pointer;
+  line-height: 1.25;
+}
+.three-label.building-label .bld-pr-alarm__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--title, #1f3a5f);
+}
+.three-label.building-label .bld-pr-alarm__level {
+  font-size: 11px;
+  font-weight: 700;
+}
+.three-label.building-label .bld-pr-alarm.tone-warn .bld-pr-alarm__level {
+  color: var(--warn-text, #c47a12);
+}
+.three-label.building-label .bld-pr-alarm.tone-error .bld-pr-alarm__level {
+  color: #c0392b;
+}
+.three-label.building-label .bld-pr-alarm.tone-warn {
+  border-color: rgba(237, 137, 54, 0.55);
+  animation: bld-pr-breath-warn 1.55s ease-in-out infinite;
+}
+.three-label.building-label .bld-pr-alarm.tone-error {
+  border-color: rgba(229, 72, 77, 0.55);
+  animation: bld-pr-breath-error 1.35s ease-in-out infinite;
+}
+
+/* 园区全屏：告警反光楼层引线 Callout */
+.floor-callout {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  --callout-shift: 0px;
+  --leader-len: 64px;
+}
+.floor-callout__dot {
+  position: absolute;
+  display: block;
+  font-style: normal;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  z-index: 2;
+}
+.floor-callout__leader {
+  position: absolute;
+  top: -1px;
+  height: 2px;
+  width: var(--leader-len);
+  z-index: 1;
+}
+.floor-callout.is-right .floor-callout__leader {
+  left: 0;
+  transform-origin: left center;
+  transform: rotate(-48deg);
+}
+.floor-callout.is-left .floor-callout__leader {
+  left: calc(-1 * var(--leader-len));
+  transform-origin: right center;
+  transform: rotate(-48deg);
+}
+.floor-callout__card {
+  position: absolute;
+  bottom: calc(46px + var(--callout-shift));
+  z-index: 3;
+  width: 196px;
+  padding: 8px 10px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+}
+.floor-callout.is-right .floor-callout__card {
+  left: 40px;
+}
+.floor-callout.is-left .floor-callout__card {
+  right: 40px;
+  left: auto;
+}
+.floor-callout__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.floor-callout__grade {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.floor-callout__where {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted, #5d7189);
+  white-space: nowrap;
+}
+.floor-callout__time {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted, #5d7189);
+  margin-bottom: 2px;
+}
+.floor-callout__text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--title, #1f3a5f);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.floor-callout__more {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted, #5d7189);
+}
+.floor-callout.tone-warn .floor-callout__dot {
+  background: #f2c14e;
+  box-shadow: 0 0 10px 3px rgba(242, 193, 78, 0.85);
+  animation: floor-callout-dot-warn 1.45s ease-in-out infinite;
+}
+.floor-callout.tone-error .floor-callout__dot {
+  background: #e31c24;
+  box-shadow: 0 0 10px 3px rgba(227, 28, 36, 0.85);
+  animation: floor-callout-dot-error 1.25s ease-in-out infinite;
+}
+.floor-callout.tone-warn .floor-callout__leader {
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.95), rgba(242, 193, 78, 0.35));
+  box-shadow: 0 0 6px rgba(242, 193, 78, 0.7);
+}
+.floor-callout.tone-error .floor-callout__leader {
+  background: linear-gradient(90deg, rgba(227, 28, 36, 0.95), rgba(227, 28, 36, 0.35));
+  box-shadow: 0 0 6px rgba(227, 28, 36, 0.7);
+}
+.floor-callout.is-left.tone-warn .floor-callout__leader {
+  background: linear-gradient(90deg, rgba(242, 193, 78, 0.35), rgba(242, 193, 78, 0.95));
+}
+.floor-callout.is-left.tone-error .floor-callout__leader {
+  background: linear-gradient(90deg, rgba(227, 28, 36, 0.35), rgba(227, 28, 36, 0.95));
+}
+.floor-callout.tone-warn .floor-callout__card {
+  border: 1px solid rgba(242, 193, 78, 0.65);
+  animation: bld-pr-breath-warn 1.55s ease-in-out infinite;
+}
+.floor-callout.tone-error .floor-callout__card {
+  border: 1px solid rgba(227, 28, 36, 0.65);
+  animation: bld-pr-breath-error 1.35s ease-in-out infinite;
+}
+.floor-callout.tone-warn .floor-callout__grade {
+  color: var(--warn-text, #9a6a00);
+}
+.floor-callout.tone-error .floor-callout__grade {
+  color: #c0392b;
+}
+@keyframes floor-callout-dot-warn {
+  0%,
+  100% {
+    box-shadow: 0 0 6px 2px rgba(242, 193, 78, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 16px 5px rgba(242, 193, 78, 0.95);
+  }
+}
+@keyframes floor-callout-dot-error {
+  0%,
+  100% {
+    box-shadow: 0 0 6px 2px rgba(227, 28, 36, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 16px 5px rgba(227, 28, 36, 0.95);
+  }
+}
+@keyframes bld-pr-breath-warn {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(237, 137, 54, 0.25);
+    background: rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(237, 137, 54, 0.95),
+      0 0 4px rgba(245, 166, 35, 0.5);
+    background: rgba(255, 248, 235, 0.98);
+  }
+}
+@keyframes bld-pr-breath-error {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(229, 72, 77, 0.28);
+    background: rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(229, 72, 77, 0.98),
+      0 0 5px rgba(229, 72, 77, 0.55);
+    background: rgba(255, 240, 240, 0.98);
+  }
+}
+
+.three-label.device-name-label {
+  margin-left: -100px;
+  width: 200px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 17px;
+  padding: 4px 10px;
+}
+
+/* ============ 楼层看板（HospitalPage 固定面板外观；定位仍在页面 scoped） ============ */
+.floor-board {
+  width: 360px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 22px rgba(43, 108, 160, 0.1);
+  color: var(--title);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.floor-board .fb-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.floor-board .fb-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.floor-board .fb-badge {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.floor-board .fb-badge.normal {
+  color: var(--primary);
+  background: rgba(43, 124, 227, 0.12);
+}
+.floor-board .fb-badge.warn {
+  color: var(--warn-text);
+  background: rgba(232, 168, 56, 0.16);
+}
+.floor-board .fb-badge.error {
+  color: #c0392b;
+  background: rgba(229, 72, 77, 0.14);
+}
+.floor-board .fb-sec {
+  margin: 10px 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.floor-board .fb-alarm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 16px;
+}
+.floor-board .fb-at {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--muted);
+}
+.floor-board .fb-alarm.warn .fb-at {
+  color: var(--warn-text);
+}
+.floor-board .fb-alarm.error .fb-at {
+  color: #c0392b;
+}
+.floor-board .fb-ac {
+  flex: 1;
+  min-width: 0;
+  /* 预警内容完整展示：自动换行，不再单行省略截断后半段 */
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.floor-board .fb-handle {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.floor-board .fb-handle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.floor-board .fb-none {
+  padding: 4px 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+.floor-board .fb-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.floor-board .fb-pager .fb-page-btn {
+  pointer-events: auto;
+  padding: 4px 12px;
+  border: 1px solid rgba(43, 124, 227, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--primary);
+  font-size: 15px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.floor-board .fb-pager .fb-page-btn:hover:not(:disabled) {
+  background: rgba(43, 124, 227, 0.12);
+}
+.floor-board .fb-pager .fb-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.floor-board .fb-pager .fb-page-info {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ============ 交互态 ============ */
+/* 列表行 / 数据卡悬停（高优先级覆盖各面板 scoped 基础色） */
+.list .item,
+.cards .card {
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+
+.list .item:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-100);
+}
+
+.cards .card:hover {
+  border-color: var(--primary-200);
+  box-shadow:
+    var(--card-shadow),
+    0 4px 14px rgba(43, 108, 160, 0.08);
+}
+
+/* 尊重系统"减少动态效果"偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .auto-scroll,
+  .pulse-teal {
+    animation: none;
+  }
+}
+
+/* ============ 筛选下拉（NSelect） ============ */
+/* 触发框固定宽度并禁止 flex 压缩（控制条为 flex 容器，窄窗口下会挤压 select） */
+.filter-select {
+  flex: none !important;
+  width: 140px !important;
+  min-width: 140px !important;
+}
+
+/* 下拉菜单宽度兜底：naive 会用 JS 测量宽度写入内联样式，
+   测窄了选项文字会溢出成“半个字”。显式固定为与输入框相同的 140px，
+   保证与触发框等宽外，文字也一定能完整显示（140px 足够容纳 4~5 个汉字选项） */
+.n-base-select-menu {
+  width: 140px !important;
+}
+
+/* NSelect 默认态显示边框：naive 原生设计是默认边框透明（border-color:#0000），
+   只有 hover/focus/active 才显示（见 internal-selection styles/index.cssr.mjs）。
+   这里让默认态也显示浅蓝边框，悬停/聚焦/展开仍走 naive 各自的 border 简写变色。
+   :not 排除交互态，避免压过 focus/active 的边框色。 */
+.n-base-selection:not(:hover):not(.n-base-selection--active):not(.n-base-selection--focus):not(
+    .n-base-selection--disabled
+  )
+  .n-base-selection__state-border {
+  border-color: var(--border-strong);
+}

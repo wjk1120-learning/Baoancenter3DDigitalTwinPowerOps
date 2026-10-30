@@ -34,7 +34,7 @@ const emit = defineEmits<{ select: [value: string] }>()
 .cat-panel {
   position: absolute;
   left: 24px;
-  top: 16px;
+  top: calc(var(--topbar-height) + 16px);
   z-index: 12;
   width: max-content;
   max-width: 42vw;

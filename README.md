@@ -14,9 +14,17 @@
 
 ```text
 src/
-├─ main.ts / App.vue           # 入口
-├─ styles/global.css           # 全局样式
+├─ main.ts / App.vue           # 入口（App = 顶栏 + 页内标签切换的壳）
+├─ assets/logo.png             # 顶栏 logo（暂用福永图占位）
+├─ styles/theme.css            # 全局样式（用户自福永原样搬来的设计令牌）
+├─ components/                 # 跨模块组件
+│  ├─ TopBar.vue               #   顶部栏（品牌/页签/导航下拉/时钟/全屏）
+│  └─ PageTabs.vue             #   页内标签条
+├─ config/navConfig.ts         # 顶部导航清单
+├─ store/pageTabs.ts           # 页内标签状态（无 pinia，模块级单例）
 └─ views/
+   ├─ placeholder/             # 未移植模块的占位页
+   │  └─ PlaceholderPage.vue
    └─ power-room/              # 配电房模块
       ├─ PowerRoomPage.vue     # 页面（房间切换 / 顶栏胶囊）
       ├─ components/           # 模块独有组件
@@ -30,7 +38,7 @@ src/
          └─ powerRoom.ts       #   类型 schema
 ```
 
-后续扩张仍按模块优先：接后端时建 `api/`、多页面时建 `router/`、有全局状态时建 `store/`、跨模块组件放 `src/components/`——模块私有的东西一律先进自己的模块目录。
+后续扩张仍按模块优先：接后端时建 `api/`、多页面时建 `router/`（届时 App.vue 的 v-if 换 `<router-view>`）——模块私有的东西一律先进自己的模块目录。
 
 ## 命名规范
 
