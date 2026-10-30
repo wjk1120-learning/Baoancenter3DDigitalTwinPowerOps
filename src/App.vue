@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import TopBar from './components/TopBar.vue'
 import PowerRoomPage from './views/power-room/PowerRoomPage.vue'
 import PlaceholderPage from './views/placeholder/PlaceholderPage.vue'
@@ -12,9 +12,12 @@ import { usePageTabs } from './store/pageTabs'
  */
 const { activePath, open } = usePageTabs()
 
-// 启动开配电房标签（目前唯一实页；医院总览为占位页，从导航下拉打开）
+// 启动开配电房标签（目前唯一实页；其余导航项为占位页）
 const powerRoom = navConfig.find((i) => i.id === 'power-room')!
 open(powerRoom.route, powerRoom.name, powerRoom.id)
+
+/** 当前激活的导航项（决定占位页标题；运维平台外链项不会进 activePath） */
+const currentNav = computed(() => navConfig.find((i) => i.route === activePath.value))
 
 // 整个应用作为 1920×1080 画布等比缩放居中（16:9 铺满，其他比例留对称边）
 const scale = ref(1)
@@ -37,7 +40,7 @@ onBeforeUnmount(() => ro?.disconnect())
       <!-- 内容区铺满整个 1920×1080（3D 全屏铺底） -->
       <main class="app-main">
         <PowerRoomPage v-if="activePath === '/power-room'" />
-        <PlaceholderPage v-else name="医院总览" />
+        <PlaceholderPage v-else-if="currentNav" :name="currentNav.name" />
       </main>
       <TopBar />
     </div>

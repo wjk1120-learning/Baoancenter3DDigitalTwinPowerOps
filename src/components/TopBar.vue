@@ -2,15 +2,28 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { navConfig } from '../config/navConfig'
 import { usePageTabs } from '../store/pageTabs'
+import { canAccessOperationsPlatform } from '../utils/operationsAccess'
+import { openOperationsPlatform } from '../utils/jumpToOperations'
 import PageTabs from './PageTabs.vue'
 import logoUrl from '../assets/logo.png'
 
 /**
  * 顶部栏（视觉照搬福永 TopBar）：品牌 + 页内标签条 + 导航下拉 + 时钟 + 全屏。
- * 宝安差异：无 router/pinia/naive-ui/登录——下拉菜单自写，用户名与退出按钮
- * 等登录模块移植后再补。
+ * 宝安差异：无 router/pinia/naive-ui/登录——下拉菜单自写。
+ * 用户名与退出按钮暂缺，见模板内 TODO(登录移植) 标记。
  */
 const { activePath, open } = usePageTabs()
+
+// TODO(登录移植): 传入 readAuthUser() 的会话用户；当前无登录态按 null 走（与福永
+// 「用户信息缺失时保持可见」一致，即运维平台入口默认显示，外部人员登录后消失）
+const operationsAllowed = canAccessOperationsPlatform(null)
+
+/** 下拉选项：运维平台仅内部人员可见（外部人员 userLevel=2 隐藏） */
+const navOptions = computed(() =>
+  navConfig
+    .filter((item) => item.id !== 'operations' || operationsAllowed)
+    .map((item) => ({ label: item.name, route: item.route })),
+)
 
 const currentNavName = computed(
   () => navConfig.find((i) => i.route === activePath.value)?.name ?? navConfig[0]!.name,
@@ -22,8 +35,12 @@ const navRoot = ref<HTMLElement | null>(null)
 function handleNavSelect(route: string) {
   const item = navConfig.find((i) => i.route === route)
   if (!item) return
-  open(item.route, item.name, item.id)
   navOpen.value = false
+  if (item.openInNewWindow) {
+    void openOperationsPlatform()
+    return
+  }
+  open(item.route, item.name, item.id)
 }
 
 function onDocClick(e: MouseEvent) {
@@ -100,12 +117,12 @@ onBeforeUnmount(() => {
         </button>
         <ul v-if="navOpen" class="nav-menu">
           <li
-            v-for="item in navConfig"
-            :key="item.id"
+            v-for="item in navOptions"
+            :key="item.route"
             :class="{ current: item.route === activePath }"
             @click="handleNavSelect(item.route)"
           >
-            {{ item.name }}
+            {{ item.label }}
           </li>
         </ul>
       </div>
@@ -130,6 +147,11 @@ onBeforeUnmount(() => {
           <span class="time">{{ timeText }}</span>
         </div>
       </div>
+      <!-- TODO(登录移植): 用户名+退出按钮暂缺，登录上线时补齐（照搬福永 TopBar.vue:157-178）：
+           1. 用户名 <span class="user-label">{{ 会话用户名 }}</span> 插到本注释位置（时钟之后、全屏之前），
+              福永读 readAuthUser()，样式 .user-label 一并搬；
+           2. 退出按钮 class="tb-btn danger"（红色出箭头图标）插到全屏按钮之后，
+              logout = 确认弹窗 → 登出接口 → 清会话 → 跳登录页。 -->
       <button
         class="tb-btn fullscreen"
         :title="isFullscreen ? '退出全屏' : '进入全屏'"

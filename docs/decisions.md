@@ -38,3 +38,5 @@
 | 2026-10-30 | 配色以用户自福永整份搬来的 src/styles/theme.css（+naiveTheme.ts）为唯一基准，global.css 撤销（用户删） | 用户定调「配色按福永的来」；theme.css 同时含 reset/字体/浅色渐变底，无需叠加层 |
 | 2026-10-30 | 顶部栏移植：TopBar+PageTabs+store/pageTabs（无 pinia 模块单例）+navConfig（医院总览占位/配电房实页），App.vue 壳内 v-if 切视图；NDropdown 换自写下拉、暂无用户名/退出（等登录移植）；logo 用福永图占位；naiveTheme.ts 在 tsconfig 暂排除（naive-ui 未装） | 用户要求「顶部tab栏也拉来」；缺的三个依赖用等价轻实现顶上，后续引 pinia/router/naive-ui 时逐个替换不动视觉 |
 | 2026-10-30 | App.vue 加 1920×1080 舞台等比缩放居中（scale=min(内宽/1920,内高/1080)，ResizeObserver 监听），福永 App.vue 同款机制原样搬运 | 用户指出「福永的没那么大、宝安的这么大」：福永整套 UI 画在固定 1920×1080 上整体缩小，宝安原生像素直出致 80px 顶栏/24px 标题显大；实测 1600×900 视口缩放 0.833、顶栏占 7.4% 与福永 80/1080 一致 |
+| 2026-10-30 | 顶栏暂不加用户名/退出按钮，等登录模块移植；TopBar.vue 模板留 TODO(登录移植) 标记（含福永出处 TopBar.vue:157-178 与移植清单） | 用户拍板「等登录功能上线再说，但要做提醒标记」；grep TODO(登录移植) 可随时找到 |
+| 2026-10-30 | 顶部下拉导航补齐福永 7 项（医院总览/设备管理/配电房/告警中心/缺陷管理/培训平台/运维平台；工单平台保持注释隐藏）；「运维平台」按内部人员显隐——utils/operationsAccess 搬福永规则（userLevel=2 外部人员隐藏，未登录/缺失保持可见），暂传 null 即默认显示，登录移植后改传会话用户；authConfig 可缺省读 VITE_OPERATIONS_URL（已配 47.112.199.80/opsPlatform/），点击新窗口打开，ticket 签发留 TODO(登录移植) | 用户要求下拉与福永一致且运维平台内部人员可见；除配电房外均为占位页 |
