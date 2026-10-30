@@ -1,11 +1,16 @@
 /**
- * 宝安配电房 3D 最小场景：读 power-rooms.json 某间房 → 按布局坐标摆柜体模型 + 母线流光。
+ * 宝安配电房 3D 引擎（机制照搬福永 engine/engine.ts + scene.ts 的总览部分）：
  *
- * 模型：替身阶段直接复用福永柜体 GLB（public/models/cabinets/，Draco 压缩）。
- * 归一化：每个模型按包围盒统一缩放到标准柜高 2.2m、落地 y=0（福永柜体 GLB
- * 原始尺寸不一，不可直接使用原始大小——对齐福永 fit 思路的简化版）。
- * 渲染态/灯光/地面/母线对齐福永 power-room engine：ACES + 主光投影 + 淡蓝
- * 背景雾 + 科技蓝网格地面 + 流光母线（engine/look.ts、engine/bus.ts 同款参数）。
+ * 为什么之前「不顺畅、视角差」：旧实现每次切房销毁整个场景重建（WebGL 上下文、
+ * Draco 解码全部重来），模型一次性摆完（单帧卡顿），相机死死钉在 (0,9,14) 与
+ * 房间大小无关。现在对齐福永：
+ * - 渲染器/相机/灯光/地面常驻，setRoom 只重建柜体内容；
+ * - 模型模板模块级缓存：同类柜整个应用周期只加载+归一化一次，摆柜用 clone；
+ * - 分批建柜（每帧 2 台，福永 BUILD_BATCH 同款），建柜期间相机停远景、关投影；
+ * - 建完：柜体 scale.y 以 backOut 0.45s 弹出 + 相机从 1.6 倍远景 lerp 飞入，
+ *   到位后开 0.55 缓慢自转，用户一拖拽即停；
+ * - 机位角度全抄福永 focusLayout：FOV 42、俯仰 17°、偏航 12°，并按柜群包围盒
+ *   投影取景（只放大不拉远，放大上限 15%，circuitFitZoom 同款算法）。
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -17,49 +22,159 @@ import type { CabinetModel, PowerRoomConfig } from '../data/powerRoom'
 
 const CABINET_HEIGHT = 2.2
 const MODEL_URL = (m: CabinetModel) => `/models/cabinets/${m}.glb`
+/** 每帧建柜数（福永 scene.ts BUILD_BATCH 同款，避免单帧卡顿） */
+const BUILD_BATCH = 2
+/** 名牌离柜顶的高度（福永 addNameTag：min(0.55, h*0.25+0.2)，柜高 2.2 时取 0.55） */
+const LABEL_GAP = 0.55
 
-/** 白色圆角名字牌（对齐福永样式：白底黑字，浮在柜顶上方） */
-function makeNameLabel(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')!
-  const font = '28px "Microsoft YaHei", sans-serif'
-  ctx.font = font
-  const w = Math.ceil(ctx.measureText(text).width) + 48
-  const h = 52
-  canvas.width = w
-  canvas.height = h
-  const r = 12
-  ctx.fillStyle = 'rgba(255,255,255,0.94)'
-  ctx.beginPath()
-  ctx.roundRect(1, 1, w - 2, h - 2, r)
-  ctx.fill()
-  ctx.font = font
-  ctx.fillStyle = '#182635'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(text, w / 2, h / 2 + 1)
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }),
+// ---- 机位（福永 engine.ts / focusLayout.ts 同款常量） ----
+const PERSP_FOV = 42
+const CAM_PITCH = (17 * Math.PI) / 180
+const CAM_YAW = (12 * Math.PI) / 180
+const CIRCUIT_DIST = Math.hypot((18 / 1.3) * 1.1, (16 / 1.3) * 1.1)
+function circuitCam(dist: number) {
+  const horiz = dist * Math.cos(CAM_PITCH)
+  return new THREE.Vector3(
+    horiz * Math.sin(CAM_YAW),
+    dist * Math.sin(CAM_PITCH),
+    horiz * Math.cos(CAM_YAW),
   )
-  // 世界尺寸按画布比例：高 0.34m
-  sprite.scale.set((w / h) * 0.34, 0.34, 1)
-  sprite.renderOrder = 10
-  return sprite
+}
+const CAM_END = circuitCam(CIRCUIT_DIST)
+const CAM_START = circuitCam(CIRCUIT_DIST * 1.6)
+const LOOK_START = new THREE.Vector3(0, 0.4, 0)
+/** 取景安全区（自画面中心算的屏幕比例）与初始放大上限（福永同款） */
+const FIT_HX = 0.345
+const FIT_HY = 0.4
+const VIEW_ZOOM_MAX = 1.15
+
+function backOut(p: number): number {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2)
 }
 
-export function createPowerRoomScene(container: HTMLElement, room: PowerRoomConfig, pitch: number) {
+/** 柜体上方名称标签（福永 util.ts makeNameLabel 同款：粗体、纯白底+蓝描边、无 mipmap） */
+function makeNameLabel(text: string): THREE.Sprite {
+  const FONT = "bold 26px 'Microsoft YaHei', sans-serif"
+  const LINE_H = 30
+  const PAD_X = 12
+  const PAD_Y = 6
+  const WORLD_SCALE = 0.008
+
+  const measure = document.createElement('canvas').getContext('2d')!
+  measure.font = FONT
+  const textW = Math.ceil(measure.measureText(String(text)).width)
+
+  const width = Math.ceil(textW + PAD_X * 2)
+  const height = Math.ceil(LINE_H + PAD_Y * 2)
+  const cv = document.createElement('canvas')
+  cv.width = width
+  cv.height = height
+  const tex = new THREE.CanvasTexture(cv)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.minFilter = THREE.LinearFilter
+  tex.magFilter = THREE.LinearFilter
+  const ctx = cv.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = 'rgba(43,108,160,0.42)'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.roundRect(1, 1, width - 2, height - 2, 8)
+  ctx.fill()
+  ctx.stroke()
+  ctx.font = FONT
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#0f2438'
+  ctx.fillText(String(text), width / 2, PAD_Y + LINE_H / 2)
+  tex.needsUpdate = true
+
+  const sp = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthWrite: false,
+      alphaTest: 0.05,
+    }),
+  )
+  sp.scale.set(width * WORLD_SCALE, height * WORLD_SCALE, 1)
+  return sp
+}
+
+// ---- 模型模板：模块级缓存，切房不重载（归一化只做一次） ----
+const draco = new DRACOLoader()
+draco.setDecoderPath('/draco/')
+const gltf = new GLTFLoader()
+gltf.setDRACOLoader(draco)
+
+const protoCache = new Map<CabinetModel, Promise<THREE.Group | null>>()
+
+function loadProto(model: CabinetModel): Promise<THREE.Group | null> {
+  let p = protoCache.get(model)
+  if (!p) {
+    p = gltf
+      .loadAsync(MODEL_URL(model))
+      .then((g) => {
+        const obj = g.scene
+        // 归一化：统一柜高、居中 x/z、落地 y=0；整个柜投阴影。
+        // 缩放必须烘在内层（福永 bigUnitModel.ts 同款分层）：peidiangui 原始几何
+        // 高达 145.8 单位、归一化缩放只有 0.015，入场弹出动画写的是外层 scale.y，
+        // 若缩放在克隆根上会被动画覆盖（柜体放大 66 倍跑到地下）。
+        const box = new THREE.Box3().setFromObject(obj)
+        const size = box.getSize(new THREE.Vector3())
+        const scale = size.y > 0 ? CABINET_HEIGHT / size.y : 1
+        const center = box.getCenter(new THREE.Vector3())
+        obj.position.x -= center.x
+        obj.position.z -= center.z
+        obj.position.y -= box.min.y
+        obj.traverse((o) => {
+          if ((o as THREE.Mesh).isMesh) o.castShadow = true
+        })
+        const inner = new THREE.Group()
+        inner.scale.setScalar(scale)
+        inner.add(obj)
+        const holder = new THREE.Group()
+        holder.add(inner)
+        return holder
+      })
+      .catch(() => null)
+    protoCache.set(model, p)
+  }
+  return p
+}
+
+/** 释放每房独占资源（名字牌 canvas 贴图）。柜体 clone 与模板共享几何/材质，不能释放。 */
+function disposeContent(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const sprite = o as THREE.Sprite
+    if (!sprite.isSprite) return
+    sprite.material.map?.dispose()
+    sprite.material.dispose()
+  })
+}
+
+export function createPowerRoomScene(
+  container: HTMLElement,
+  pitch: number,
+  /** debug: true 时返回内部状态供 src/tests 下的调试页排查，生产代码不传 */
+  opts: { debug?: boolean } = {},
+) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0xeaf3fa)
   scene.fog = new THREE.Fog(0xeaf3fa, 28, 80)
 
-  const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 500)
-  camera.position.set(0, 9, 14)
+  const camera = new THREE.PerspectiveCamera(
+    PERSP_FOV,
+    container.clientWidth / container.clientHeight,
+    0.1,
+    2000,
+  )
+  camera.position.copy(CAM_START)
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+  renderer.setPixelRatio(1)
   renderer.setSize(container.clientWidth, container.clientHeight)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.15
   renderer.shadowMap.enabled = true
@@ -67,8 +182,20 @@ export function createPowerRoomScene(container: HTMLElement, room: PowerRoomConf
   container.appendChild(renderer.domElement)
 
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0, 1, 0)
   controls.enableDamping = true
+  controls.enablePan = false
+  controls.minDistance = 0.8
+  controls.maxDistance = 600
+  controls.maxPolarAngle = 1.45
+  controls.enabled = false
+  controls.addEventListener('start', () => {
+    animating = false
+    renderer.domElement.style.cursor = 'grabbing'
+  })
+  controls.addEventListener('end', () => {
+    renderer.domElement.style.cursor = 'grab'
+  })
+  renderer.domElement.style.cursor = 'grab'
 
   // 灯光：福永配电房三灯组（半球环境 + 暖色主光带投影 + 冷色补光）
   scene.add(new THREE.HemisphereLight(0xdcecf4, 0x202b2e, 2.1))
@@ -112,86 +239,163 @@ export function createPowerRoomScene(container: HTMLElement, room: PowerRoomConf
   })
   scene.add(grid)
 
-  const draco = new DRACOLoader()
-  draco.setDecoderPath('/draco/')
-  const gltf = new GLTFLoader()
-  gltf.setDRACOLoader(draco)
+  /** 柜体内容层：切房只清这一层，渲染器/灯光/地面常驻 */
+  const content = new THREE.Group()
+  scene.add(content)
 
-  // 模型缓存：同类柜只加载一次，其余 clone
-  const modelCache = new Map<CabinetModel, THREE.Group>()
-
-  function normalizeAndClone(model: CabinetModel): THREE.Group | null {
-    const cached = modelCache.get(model)
-    if (!cached) return null
-    const obj = cached.clone()
-    // 包围盒在缓存时已归一化过，clone 直接可用
-    return obj
-  }
-
-  const layout = computePowerRoomLayout(room, pitch)
-  const cabinets = room.rows.flat()
-  const needed = [...new Set(cabinets.map((c) => c.model))]
-
-  let mounted = 0
   const status = document.createElement('div')
   status.style.cssText =
     'position:absolute;bottom:10px;left:12px;color:#2c4a66;font:13px/1.6 monospace;pointer-events:none'
-  status.textContent = `加载中 0/${cabinets.length} …`
   container.appendChild(status)
 
-  const blockers: Promise<unknown>[] = needed.map((m) =>
-    gltf.loadAsync(MODEL_URL(m)).then((g) => {
-      const obj = g.scene
-      // 归一化：统一柜高、居中 x/z、落地 y=0；整个柜投阴影
-      const box = new THREE.Box3().setFromObject(obj)
-      const size = box.getSize(new THREE.Vector3())
-      const scale = size.y > 0 ? CABINET_HEIGHT / size.y : 1
-      obj.scale.setScalar(scale)
-      const box2 = new THREE.Box3().setFromObject(obj)
-      const center = box2.getCenter(new THREE.Vector3())
-      obj.position.x -= center.x
-      obj.position.z -= center.z
-      obj.position.y -= box2.min.y
-      obj.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) o.castShadow = true
-      })
-      modelCache.set(m, obj)
-    }),
-  )
-
+  // ---- 建柜编排状态 ----
+  let buildGen = 0
   let bus: BusHandle | null = null
+  /** 本房柜体（入场弹出用，scale.y 0→1） */
+  let entrants: THREE.Group[] = []
+  let entranceAt = 0
+  let animating = false
+  const targetPos = CAM_START.clone()
+  const targetLook = LOOK_START.clone()
 
-  Promise.allSettled(blockers).then(() => {
-    layout.slots.forEach((slot) => {
-      const cab = cabinets.find((c) => c.code === slot.code)
-      if (!cab) return
-      const obj = normalizeAndClone(cab.model)
-      if (!obj) {
-        console.warn(`[PowerRoomScene] 模型 ${cab.model} 加载失败，柜 ${cab.code} 未摆放`)
-        return
+  /**
+   * 初始（总览）视角取景：把柜群包围盒（含名牌余量）投到屏幕上量占用，
+   * 取「尽量放大但不超安全区」的机位距离，上限 15% 放大、只放大不拉远
+   * （福永 engine.ts circuitFitZoom 同款算法）。
+   */
+  function fitCamera(slots: { x: number; z: number }[]) {
+    if (!slots.length) {
+      targetPos.copy(CAM_END)
+      targetLook.set(0, 0, 0)
+      return
+    }
+    const dir = CAM_END.clone().normalize()
+    const cam = new THREE.PerspectiveCamera(PERSP_FOV, camera.aspect, 0.1, 2000)
+    const p = new THREE.Vector3()
+    cam.position.copy(dir).multiplyScalar(CIRCUIT_DIST)
+    cam.lookAt(0, 0, 0)
+    cam.updateMatrixWorld(true)
+    let hx = 0
+    let hy = 0
+    for (const s of slots) {
+      for (const y of [0, CABINET_HEIGHT + LABEL_GAP + 0.15]) {
+        p.set(s.x, y, s.z).project(cam)
+        hx = Math.max(hx, Math.abs(p.x) / 2)
+        hy = Math.max(hy, Math.abs(p.y) / 2)
       }
-      obj.position.x += slot.x
-      obj.position.z += slot.z
-      scene.add(obj)
-      const label = makeNameLabel(cab.name)
-      label.position.set(slot.x, CABINET_HEIGHT + 0.45, slot.z)
-      scene.add(label)
-      mounted += 1
-    })
-    // 柜体到位后铺流光母线（进线柜出发，沿各排柜前铺开）
-    bus = buildPowerRoomBus(
-      layout.slots,
-      (code) => cabinets.find((c) => c.code === code)?.name ?? code,
-    )
-    scene.add(bus.group)
-    status.textContent = `已摆放 ${mounted}/${cabinets.length}（${room.name}）`
-  })
+    }
+    const k = Math.max(hx / FIT_HX, hy / FIT_HY)
+    const d = Math.max(CIRCUIT_DIST / VIEW_ZOOM_MAX, Math.min(CIRCUIT_DIST, CIRCUIT_DIST * k))
+    targetPos.copy(dir).multiplyScalar(d)
+    targetLook.set(0, 0, 0)
+  }
 
+  function clearContent() {
+    bus?.dispose()
+    bus = null
+    entrants = []
+    entranceAt = 0
+    for (const child of [...content.children]) {
+      content.remove(child)
+      disposeContent(child)
+    }
+  }
+
+  /** 切房：清内容 → 相机停远景关投影 → 模板就绪后分批建柜 → 飞入 + 弹出 */
+  function setRoom(room: PowerRoomConfig) {
+    buildGen += 1
+    const gen = buildGen
+    clearContent()
+    animating = false
+    camera.position.copy(CAM_START)
+    controls.target.copy(LOOK_START)
+    targetPos.copy(CAM_START)
+    targetLook.copy(LOOK_START)
+    controls.enabled = false
+    key.castShadow = false
+
+    const layout = computePowerRoomLayout(room, pitch)
+    const cabinets = room.rows.flat()
+    const mounted = { n: 0 }
+    status.textContent = `加载中 0/${cabinets.length} …`
+
+    // 模板全部就绪（二次切房走缓存秒回）后开始分批建柜
+    Promise.all([...new Set(cabinets.map((c) => c.model))].map((m) => loadProto(m))).then(
+      (list) => {
+        if (gen !== buildGen) return
+        const protoOf = new Map<CabinetModel, THREE.Group | null>()
+        ;[...new Set(cabinets.map((c) => c.model))].forEach((m, i) => protoOf.set(m, list[i] ?? null))
+
+        let cursor = 0
+        function buildBatch() {
+          if (gen !== buildGen) return
+          let n = BUILD_BATCH
+          while (n > 0 && cursor < layout.slots.length) {
+            const slot = layout.slots[cursor]!
+            cursor += 1
+            const cab = cabinets.find((c) => c.code === slot.code)
+            if (!cab) continue
+            const proto = protoOf.get(cab.model)
+            if (!proto) {
+              console.warn(`[PowerRoomScene] 模型 ${cab.model} 加载失败，柜 ${cab.code} 未摆放`)
+              continue
+            }
+            const obj = proto.clone()
+            obj.position.x += slot.x
+            obj.position.z += slot.z
+            obj.scale.y = 0 // 入场从 0 弹出（beginEntrance 后 backOut 0.45s）
+            content.add(obj)
+            entrants.push(obj)
+            const label = makeNameLabel(cab.name)
+            label.position.set(slot.x, CABINET_HEIGHT + LABEL_GAP, slot.z)
+            content.add(label)
+            mounted.n += 1
+            n -= 1
+          }
+          status.textContent = `加载中 ${mounted.n}/${cabinets.length} …`
+          if (cursor < layout.slots.length) {
+            // setTimeout 而非 rAF：标签在后台时 rAF 停摆会饿死建柜链（实测踩坑）
+            setTimeout(buildBatch, 0)
+            return
+          }
+          // 柜体到位：铺母线、开投影、飞入 + 弹出（福永 onSceneBuildReady 同款顺序）
+          bus = buildPowerRoomBus(
+            layout.slots,
+            (code) => cabinets.find((c) => c.code === code)?.name ?? code,
+          )
+          content.add(bus.group)
+          status.textContent = `已摆放 ${mounted.n}/${cabinets.length}（${room.name}）`
+          key.castShadow = true
+          fitCamera(layout.slots)
+          entranceAt = performance.now()
+          animating = true
+        }
+        buildBatch()
+      },
+    )
+  }
+
+  let raf = 0
   function tick() {
+    raf = requestAnimationFrame(tick)
+    // 入场弹出：全部柜同一时刻 scale.y 0→1（backOut 0.45s，福永 updateVisual 同款）
+    if (entranceAt > 0) {
+      const p = Math.min(1, (performance.now() - entranceAt) / 450)
+      const sy = backOut(p)
+      for (const obj of entrants) obj.scale.y = sy
+      if (p >= 1) entranceAt = 0
+    }
+    if (animating) {
+      camera.position.lerp(targetPos, 0.1)
+      controls.target.lerp(targetLook, 0.1)
+      if (camera.position.distanceTo(targetPos) < 0.35) {
+        animating = false
+        controls.enabled = true
+      }
+    }
     controls.update()
     bus?.update(performance.now())
     renderer.render(scene, camera)
-    requestAnimationFrame(tick)
   }
   tick()
 
@@ -203,12 +407,32 @@ export function createPowerRoomScene(container: HTMLElement, room: PowerRoomConf
   window.addEventListener('resize', onResize)
 
   return {
+    setRoom,
+    // 仅供 src/tests 调试页读取（opts.debug 才有）
+    ...(opts.debug
+      ? {
+          debug: {
+            content,
+            camera,
+            controls,
+            state: () => ({
+              busBuilt: !!bus,
+              entrants: entrants.length,
+              entranceAt,
+              animating,
+              buildGen,
+            }),
+          },
+        }
+      : {}),
     dispose() {
+      buildGen += 1
+      cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
-      bus?.dispose()
-      grid.dispose()
+      clearContent()
       floor.geometry.dispose()
       ;(floor.material as THREE.Material).dispose()
+      grid.dispose()
       controls.dispose()
       renderer.dispose()
       container.removeChild(renderer.domElement)
