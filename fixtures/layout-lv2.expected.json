@@ -1,8 +1,0 @@
-{
-  "source": "Fuyong3DDigitalTwinPowerOps computeCircuitLayout (circuit.ts)",
-  "circuit": "circuit:lv2-400v",
-  "pitch": 1.32,
-  "bandGap": 5.6,
-  "slots": [],
-  "maxW": 7.92
-}
