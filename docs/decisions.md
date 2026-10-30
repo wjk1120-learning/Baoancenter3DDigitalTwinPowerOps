@@ -34,3 +34,4 @@
 | 2026-10-29 | 3D 视觉对齐福永：渲染态/灯光/地面/母线参数原样搬运——ACES+暖主光投影+淡蓝背景 0xeaf3fa+雾、科技蓝网格地面（look.ts 同款）、bus.ts 双层圆柱流光移植为 src/three/powerRoomBus.ts（BUS_ROW_OFFSET=1.675，宝安全部柜按一级大柜连） | 用户以福永截图为目标效果；参数不发明只搬运，对拍出处唯一 |
 | 2026-10-29 | 母线排间下落点修正：xDrop = max(本排末柜x, 下一排末柜x) + 0.9 | 福永各排等宽（模板拼接）不暴露；宝安排宽任意（room-1 为 1/3/1 台），原「本排末柜+0.9」使下排更靠右的柜落到竖线右侧（用户截图指出 P05/T1） |
 | 2026-10-29 | 对拍样本房 g2 移出 src/config/power-rooms.json，专存 fixtures/room-g2.sample.json（parity-layout.mjs 改读 fixtures） | 用户指出「新大楼配电房2#」混进宝安房间列表=数据污染；对拍锚点与运行时数据分离，页面/统计只认真实 6 房 31 台 |
+| 2026-10-29 | 目录重构为模块自治：src/views/power-room/ 下收页面+独有组件(CategoryPanel)+engine(layout/scene/bus)+data(power-rooms.json/powerRoom.ts)；全局只留 styles，api/router/store 等到用时再建 | 用户定调「按模块分类，数据、独有组件归模块目录」（参照 OpsPlatform 分层）；对拍脚本同步改读新路径 |

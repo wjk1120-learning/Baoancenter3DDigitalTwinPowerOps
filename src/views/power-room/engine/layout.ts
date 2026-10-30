@@ -1,4 +1,4 @@
-import type { PowerRoomConfig } from '../schema/powerRoom'
+import type { PowerRoomConfig } from '../data/powerRoom'
 
 /**
  * 配电房一级大柜布局（纯函数，与福永 computeCircuitLayout 对拍通过）。

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { CabinetSlot } from '../power-room/layout'
+import type { CabinetSlot } from './layout'
 
 /**
  * 母线光路（照搬福永 engine/bus.ts 机制）：浅蓝光芯 + 流动光点。

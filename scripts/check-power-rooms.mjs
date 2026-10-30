@@ -13,7 +13,7 @@ const MODELS = ['jinxian', 'dianrongui', 'peidiangui', 'shuangdianyuan'] // 与 
 const DEV_CODE_RE = /^[A-Z]{2}\d{6}$/
 
 const target =
-  process.argv[2] ?? fileURLToPath(new URL('../src/config/power-rooms.json', import.meta.url))
+  process.argv[2] ?? fileURLToPath(new URL('../src/views/power-room/data/power-rooms.json', import.meta.url))
 
 const errors = []
 let rooms = 0

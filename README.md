@@ -10,24 +10,63 @@
 2. 渲染对拍：同模型同角度截图肉眼比对
 3. 功能对拍：按旧项目 8 个页面功能清单逐项验收
 
+## 目录结构（模块自治：页面、独有组件、引擎、数据全在模块目录下）
+
+```text
+src/
+├─ main.ts / App.vue           # 入口
+├─ styles/global.css           # 全局样式
+└─ views/
+   └─ power-room/              # 配电房模块
+      ├─ PowerRoomPage.vue     # 页面（房间切换 / 顶栏胶囊）
+      ├─ components/           # 模块独有组件
+      │  └─ CategoryPanel.vue  #   房间分类卡片
+      ├─ engine/               # 3D 引擎层（对应福永 engine/）
+      │  ├─ layout.ts          #   布局纯函数（数学对拍对象）
+      │  ├─ scene.ts           #   场景（渲染态/灯光/地面/摆柜/动画）
+      │  └─ bus.ts             #   母线光路（光芯 + 流光）
+      └─ data/                 # 模块数据
+         ├─ power-rooms.json   #   图纸+档案合并配置（6 房 31 台）
+         └─ powerRoom.ts       #   类型 schema
+```
+
+后续扩张仍按模块优先：接后端时建 `api/`、多页面时建 `router/`、有全局状态时建 `store/`、跨模块组件放 `src/components/`——模块私有的东西一律先进自己的模块目录。
+
+## 命名规范
+
+- 目录：kebab-case（`power-room/`、`engine/`、`data/`）
+- Vue 组件：PascalCase（`PowerRoomPage.vue`、`CategoryPanel.vue`）
+- 引擎/工具 ts 模块：camelCase（`layout.ts`、`powerRoom.ts`）
+- 配置 JSON：kebab-case（`power-rooms.json`）
+
 ## 当前进状
 
 - [x] 配置 schema + 校验脚本（scripts/check-power-rooms.mjs，零依赖）
-- [x] 数学对拍通过（src/power-room/layout.mjs vs 旧 circuit.ts）
-- [x] 现场采集表模板（docs/配电房摆柜信息采集表.xlsx + 生成脚本）
+- [x] 数学对拍通过（engine/layout.ts vs 旧 circuit.ts，标准答案在 fixtures/）
+- [x] 现场采集表模板 + 转换流水线（Excel → power-rooms.json）
 - [x] 模块开发文档 ×2（配电房 + 楼栋，docs/）
-- [x] 目录改名：hospital-twin-next → Baoancenter3DDigitalTwinPowerOps（2026-10-28 完成）
-- [ ] Vite + Vue3 骨架
+- [x] Vite + Vue3 骨架
+- [x] 3D 配电房场景：摆柜 / 名字牌 / 灯光 / 科技蓝地面 / 流光母线 / 6 房切换
+- [ ] 点击柜体交互（选中 / 看板）
 - [ ] 登录对接 / HTTP / WS（照搬旧项目）
-- [ ] 3D（复制旧 three/ 改造，福永模型当替身）
+- [ ] 楼栋模块（按 docs/楼栋模块开发文档.md）
+
+## 常用命令
+
+```bash
+npm run dev           # 开发服务器（5252 被占则自动顺延端口）
+npm run build         # 类型检查（vue-tsc）+ 构建
+npm run convert       # 采集表 Excel → src/views/power-room/data/power-rooms.json
+npm run check         # 配置校验（柜号唯一 / 模型枚举 / 编号正则）
+npm run parity        # 数学对拍（vs fixtures/layout-g2.expected.json）
+npm run gen:template  # 重新生成空白采集表（需本机 python + openpyxl）
+```
 
 ## 结构决策
 
 见 docs/decisions.md（每个决策一行理由，先例后改）。
 
-## 校验
+## 注意
 
-```bash
-node scripts/check-power-rooms.mjs          # 校验 src/config/power-rooms.json
-node scripts/parity-layout.mjs              # 布局对拍（vs fixtures 标准答案）
-```
+- docs/ 与 scripts/ 默认不进 git（.gitignore 用户设定，个别早期文件已入库）；克隆后需自行恢复
+- public/models/cabinets/ 下 46MB 柜体 GLB 为福永替身模型，宝安正式模型到位后整体替换

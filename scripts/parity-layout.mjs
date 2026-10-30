@@ -9,11 +9,11 @@
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { computePowerRoomLayout } from '../src/power-room/layout.ts'
+import { computePowerRoomLayout } from '../src/views/power-room/engine/layout.ts'
 
 const EPS = 1e-9
 const config = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../src/config/power-rooms.json', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/views/power-room/data/power-rooms.json', import.meta.url)), 'utf8'),
 )
 // 对拍输入房：福永 g2 样本（运行时配置已不含它，专存于 fixtures，避免污染宝安真实数据）
 const room = JSON.parse(

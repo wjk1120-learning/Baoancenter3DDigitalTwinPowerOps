@@ -11,9 +11,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
-import { computePowerRoomLayout } from '../power-room/layout'
-import { buildPowerRoomBus, type BusHandle } from './powerRoomBus'
-import type { CabinetModel, PowerRoomConfig } from '../schema/powerRoom'
+import { computePowerRoomLayout } from './layout'
+import { buildPowerRoomBus, type BusHandle } from './bus'
+import type { CabinetModel, PowerRoomConfig } from '../data/powerRoom'
 
 const CABINET_HEIGHT = 2.2
 const MODEL_URL = (m: CabinetModel) => `/models/cabinets/${m}.glb`
