@@ -232,14 +232,14 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 38px;
+  gap: 5px;
+  height: 36px;
   padding: 0 16px;
   border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
   background: var(--primary);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -279,7 +279,6 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  min-width: 132px;
   margin: 0;
   padding: 6px;
   list-style: none;
