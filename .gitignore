@@ -38,5 +38,5 @@ public/models/*.glb
 
 docs/*
 scripts/*
-src/tests/*
 *.tsbuildinfo
+/tests/
