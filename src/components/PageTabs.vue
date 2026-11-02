@@ -1,23 +1,29 @@
 <script setup lang="ts">
-import { navConfig } from '../config/navConfig'
-import { usePageTabs } from '../store/pageTabs'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { usePageTabsStore } from '../store/pageTabs'
 
-/** 页内标签条（样式与行为照搬福永 PageTabs；无 router，点击只切 store 状态） */
-const { tabs, activePath, open, close } = usePageTabs()
+const route = useRoute()
+const router = useRouter()
+const pageTabs = usePageTabsStore()
+
+const tabs = computed(() => pageTabs.tabs)
+const activePath = computed(() => pageTabs.activePath)
 
 function go(path: string) {
-  if (path === activePath.value) return
-  const item = navConfig.find((i) => i.route === path)
-  if (item) open(item.route, item.name, item.id)
+  if (path === route.fullPath) return
+  pageTabs.activePath = path
+  router.push(path)
 }
 
-function closeTab(path: string, event: MouseEvent) {
+function close(path: string, event: MouseEvent) {
   event.stopPropagation()
-  close(path)
-  // 关空时回首页标签（福永关闭兜底推 /hospital 同款逻辑）
-  if (tabs.value.length === 0) {
-    const home = navConfig[0]!
-    open(home.route, home.name, home.id)
+  const wasActive = path === route.fullPath
+  pageTabs.close(path)
+  if (wasActive && pageTabs.activePath) {
+    router.push(pageTabs.activePath)
+  } else if (wasActive && !pageTabs.activePath) {
+    router.push('/hospital')
   }
 }
 </script>
@@ -32,7 +38,7 @@ function closeTab(path: string, event: MouseEvent) {
       @click="go(tab.path)"
     >
       <span class="tab-title">{{ tab.title }}</span>
-      <button class="tab-close" title="关闭" @click="closeTab(tab.path, $event)">
+      <button class="tab-close" title="关闭" @click="close(tab.path, $event)">
         <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
           <path
             d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"

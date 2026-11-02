@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { navConfig } from '../config/navConfig'
-import { usePageTabs } from '../store/pageTabs'
+import { usePageTabsStore } from '../store/pageTabs'
 import { canAccessOperationsPlatform } from '../utils/operationsAccess'
 import { openOperationsPlatform } from '../utils/jumpToOperations'
 import PageTabs from './PageTabs.vue'
@@ -12,7 +13,9 @@ import logoUrl from '../assets/logo.png'
  * 宝安差异：无 router/pinia/naive-ui/登录——下拉菜单自写。
  * 用户名与退出按钮暂缺，见模板内 TODO(登录移植) 标记。
  */
-const { activePath, open } = usePageTabs()
+const router = useRouter()
+const pageTabs = usePageTabsStore()
+const activePath = computed(() => pageTabs.activePath)
 
 // TODO(登录移植): 传入 readAuthUser() 的会话用户；当前无登录态按 null 走（与福永
 // 「用户信息缺失时保持可见」一致，即运维平台入口默认显示，外部人员登录后消失）
@@ -40,7 +43,7 @@ function handleNavSelect(route: string) {
     void openOperationsPlatform()
     return
   }
-  open(item.route, item.name, item.id)
+  void router.push(item.route)
 }
 
 function onDocClick(e: MouseEvent) {

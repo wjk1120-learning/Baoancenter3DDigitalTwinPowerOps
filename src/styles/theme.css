@@ -229,11 +229,6 @@ body {
   transform: scale(0.97);
 }
 
-/* 区块标题左竖线 */
-.section-accent {
-  border-left: 2px solid var(--primary);
-  padding-left: 12px;
-}
 
 /* 统一返回按钮（设备建模页 / 医院聚焦：蓝底白字，悬停白底蓝字） */
 .back-btn {
@@ -270,10 +265,6 @@ body {
   transform: none;
 }
 
-/* 告警滚动 */
-.auto-scroll {
-  animation: scroll-up 24s linear infinite;
-}
 
 @keyframes scroll-up {
   0% {
@@ -734,25 +725,9 @@ body {
 
 /* 尊重系统"减少动态效果"偏好 */
 @media (prefers-reduced-motion: reduce) {
-  .auto-scroll,
   .pulse-teal {
     animation: none;
   }
-}
-
-/* ============ 筛选下拉（NSelect） ============ */
-/* 触发框固定宽度并禁止 flex 压缩（控制条为 flex 容器，窄窗口下会挤压 select） */
-.filter-select {
-  flex: none !important;
-  width: 140px !important;
-  min-width: 140px !important;
-}
-
-/* 下拉菜单宽度兜底：naive 会用 JS 测量宽度写入内联样式，
-   测窄了选项文字会溢出成“半个字”。显式固定为与输入框相同的 140px，
-   保证与触发框等宽外，文字也一定能完整显示（140px 足够容纳 4~5 个汉字选项） */
-.n-base-select-menu {
-  width: 140px !important;
 }
 
 /* NSelect 默认态显示边框：naive 原生设计是默认边框透明（border-color:#0000），

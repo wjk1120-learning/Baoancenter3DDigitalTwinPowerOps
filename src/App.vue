@@ -1,23 +1,22 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import TopBar from './components/TopBar.vue'
-import PowerRoomPage from './views/power-room/PowerRoomPage.vue'
-import PlaceholderPage from './views/placeholder/PlaceholderPage.vue'
+import { usePageTabsStore } from './store/pageTabs'
 import { navConfig } from './config/navConfig'
-import { usePageTabs } from './store/pageTabs'
 
-/**
- * 应用壳：1920×1080 舞台等比缩放居中（福永 App.vue 同款机制）+ TopBar + 页内标签切换。
- * 暂无 router，activePath 直接决定渲染哪个视图；引入 router 后 v-if 换 <router-view>。
- */
-const { activePath, open } = usePageTabs()
+const route = useRoute()
+const pageTabs = usePageTabsStore()
 
-// 启动开配电房标签（目前唯一实页；其余导航项为占位页）
-const powerRoom = navConfig.find((i) => i.id === 'power-room')!
-open(powerRoom.route, powerRoom.name, powerRoom.id)
+/** 路由变化同步页签：宝中路由与 navConfig 同源，反查即可（福永 App.vue 同款机制） */
+function syncTabFromRoute() {
+  const item = navConfig.find((i) => i.route === route.path)
+  if (item) pageTabs.open(item.route, item.name, item.id)
+}
+watch(() => route.path, syncTabFromRoute, { immediate: true })
 
-/** 当前激活的导航项（决定占位页标题；运维平台外链项不会进 activePath） */
-const currentNav = computed(() => navConfig.find((i) => i.route === activePath.value))
+// keep-alive 按组件名匹配：页面实装一个加一个（福永同款）
+const keepAliveInclude = ['PowerRoomPage']
 
 // 整个应用作为 1920×1080 画布等比缩放居中（16:9 铺满，其他比例留对称边）
 const scale = ref(1)
@@ -39,8 +38,11 @@ onBeforeUnmount(() => ro?.disconnect())
     <div class="stage" :style="{ transform: `scale(${scale})` }">
       <!-- 内容区铺满整个 1920×1080（3D 全屏铺底） -->
       <main class="app-main">
-        <PowerRoomPage v-if="activePath === '/power-room'" />
-        <PlaceholderPage v-else-if="currentNav" :name="currentNav.name" />
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="keepAliveInclude">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </main>
       <TopBar />
     </div>

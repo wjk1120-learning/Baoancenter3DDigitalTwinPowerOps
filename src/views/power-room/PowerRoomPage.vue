@@ -5,6 +5,9 @@ import { createPowerRoomScene } from './engine/scene'
 import type { PowerRoomsFile } from './data/powerRoom'
 import config from './data/power-rooms.json'
 
+// keep-alive include 按组件名匹配（福永同款）
+defineOptions({ name: 'PowerRoomPage' })
+
 // JSON 导入的 model 字段是宽泛 string，断言成 schema 类型（校验由 npm run check 兜底）
 const { pitch, rooms } = config as PowerRoomsFile
 

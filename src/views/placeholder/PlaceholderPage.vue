@@ -1,6 +1,17 @@
 <script setup lang="ts">
-/** 模块未移植的占位页（照搬福永 PlaceholderPage，去掉 router 依赖） */
-defineProps<{ name: string }>()
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { navConfig } from '../../config/navConfig'
+
+// 可作为路由组件（无 name，按 route.path 反查 navConfig）
+const props = withDefaults(defineProps<{ name?: string }>(), { name: '' })
+
+const route = useRoute()
+const pageName = computed(() => {
+  if (props.name) return props.name
+  const hit = navConfig.find((i) => i.route === route.path)
+  return hit ? hit.name : '该页面'
+})
 </script>
 
 <template>
@@ -12,7 +23,7 @@ defineProps<{ name: string }>()
         />
       </svg>
     </div>
-    <h2>{{ name }}</h2>
+    <h2>{{ pageName }}</h2>
     <p>页面建设中，敬请期待</p>
   </div>
 </template>
