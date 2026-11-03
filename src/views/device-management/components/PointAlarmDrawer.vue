@@ -37,7 +37,7 @@ const LEVEL_COLOR: Record<string, string> = {
   紧急: chartColors.danger,
   严重: chartColors.warn,
   一般: chartColors.primary,
-  提醒: chartColors.teal,
+  提醒: chartColors.muted,
 }
 
 function levelMeta(level: number) {

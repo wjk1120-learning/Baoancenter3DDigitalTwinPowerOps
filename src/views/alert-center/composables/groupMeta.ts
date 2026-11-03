@@ -4,7 +4,7 @@ import { normalizeEventLevel } from '../../../api/event/mappers'
 import { chartColors } from '../../../config/chartColors'
 
 export const GRADE_META: { id: AlertEventLevel; label: string; color: string }[] = [
-  { id: 4, label: '提醒', color: chartColors.teal },
+  { id: 4, label: '提醒', color: chartColors.muted },
   { id: 3, label: '一般', color: chartColors.primary },
   { id: 2, label: '严重', color: chartColors.warn },
   { id: 1, label: '紧急', color: chartColors.danger },
