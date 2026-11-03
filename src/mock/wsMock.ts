@@ -1,5 +1,5 @@
 import type { AlertItem } from '../api/hospital/types'
-import type { EventBrief } from '../api/event/types'
+import { mapEventBriefToAlert } from '../api/event/mappers'
 import { eventRows } from './data/event'
 
 type RecentHandler = (items: AlertItem[]) => void
@@ -8,22 +8,6 @@ type SingleHandler = (item: AlertItem) => void
 /** 推送间隔 8~15s 随机（计划拍板：定时器模拟 WS 推送） */
 const PUSH_MIN_MS = 8_000
 const PUSH_MAX_MS = 15_000
-
-function toAlertItem(e: EventBrief): AlertItem {
-  return {
-    id: e.eventId,
-    time: e.timeStr,
-    device: e.deviceName,
-    content: e.description,
-    level: e.eventLevel === 1 ? 'error' : 'warn',
-    eventLevel: e.eventLevel as AlertItem['eventLevel'],
-    system: '配电房',
-    status: e.handleStatus === 1 ? 'done' : 'pending',
-    deviceId: '',
-    locations: e.locations ?? null,
-    handleStatus: e.handleStatus,
-  }
-}
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -69,7 +53,7 @@ class WsMock {
   }
 
   private snapshot(): AlertItem[] {
-    return eventRows.map(toAlertItem)
+    return eventRows.map(mapEventBriefToAlert)
   }
 
   private syncTimer() {
@@ -95,7 +79,7 @@ class WsMock {
   private pushOnce() {
     const seed = eventRows[Math.floor(Math.random() * eventRows.length)]!
     const item: AlertItem = {
-      ...toAlertItem(seed),
+      ...mapEventBriefToAlert(seed),
       id: `mock-${Date.now()}`,
       time: nowStr(),
       handleStatus: 0,

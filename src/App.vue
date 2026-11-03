@@ -15,8 +15,8 @@ function syncTabFromRoute() {
 }
 watch(() => route.path, syncTabFromRoute, { immediate: true })
 
-// keep-alive 按组件名匹配：页面实装一个加一个（福永同款）
-const keepAliveInclude = ['PowerRoomPage']
+// keep-alive 按组件名匹配：页面实装一个加一个（与 router REAL_PAGES 同步登记）
+const keepAliveInclude = ['PowerRoomPage', 'AlertCenterPage']
 
 // 整个应用作为 1920×1080 画布等比缩放居中（16:9 铺满，其他比例留对称边）
 const scale = ref(1)
