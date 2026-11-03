@@ -13,16 +13,18 @@ const props = defineProps<{
   refreshToken?: number
 }>()
 
-const gradeTotal = computed(() => Object.values(props.gradeCounts).reduce((s, v) => s + v, 0))
+/** 图表只统计 1紧急/2严重/3一般 三档（用户定稿：提醒不进图，仅表格展示） */
+const CHART_GRADES = GRADE_META.filter((g) => g.id !== 4)
+
+const gradeTotal = computed(() => CHART_GRADES.reduce((s, g) => s + (props.gradeCounts[g.id] ?? 0), 0))
 
 // ============ 今日告警分布（§3.1 GET /FY/event/today 真实计数；无告警画空态，不造假扇区） ============
 
-/** 契约四级（1紧急 2严重 3一般 4提醒）；提醒级用 teal 补色，其余沿用告警色板 */
+/** 三档（1紧急 2严重 3一般）；提醒级不进图（用户定稿），沿用告警色板 */
 const TODAY_LEVEL_META: { id: AlertEventLevel; label: string; color: string }[] = [
   { id: 1, label: '紧急', color: chartColors.danger },
   { id: 2, label: '严重', color: chartColors.warn },
   { id: 3, label: '一般', color: chartColors.primary },
-  { id: 4, label: '提醒', color: chartColors.teal },
 ]
 
 const todayDist = ref<Awaited<ReturnType<typeof fetchTodayLevelDistribution>>>(null)
@@ -51,6 +53,7 @@ const todayOpt = computed<EChartsOption | null>(() => {
     value: dist.counts[m.id],
     itemStyle: { color: m.color },
   })).filter((s) => s.value > 0)
+  if (!slices.length) return null
   return {
     tooltip: { trigger: 'item' },
     legend: {
@@ -80,7 +83,7 @@ const todayOpt = computed<EChartsOption | null>(() => {
         left: 'center',
         top: '34%',
         style: {
-          text: String(dist.total),
+          text: String(slices.reduce((s, x) => s + x.value, 0)),
           fill: chartColors.title,
           fontSize: 22,
           fontWeight: 600,
@@ -92,7 +95,7 @@ const todayOpt = computed<EChartsOption | null>(() => {
 })
 
 const levelOpt = computed<EChartsOption>(() => {
-  const counts = GRADE_META.map((g) => ({
+  const counts = CHART_GRADES.map((g) => ({
     name: g.label,
     value: props.gradeCounts[g.id],
     itemStyle: { color: g.color },
@@ -137,9 +140,9 @@ const levelOpt = computed<EChartsOption>(() => {
   }
 })
 
-// 类型统计：四个类型横条
+// 类型统计：三档横条（提醒不进图）
 const typeOpt = computed<EChartsOption>(() => {
-  const rows = [...GRADE_META].reverse()
+  const rows = [...CHART_GRADES].reverse()
   return {
     grid: { left: 8, right: 28, top: 8, bottom: 4, containLabel: true },
     xAxis: { type: 'value', show: false },
