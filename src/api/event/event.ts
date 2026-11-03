@@ -1,7 +1,9 @@
 /**
- * 事件接口（/event/*，契约见 docs/福永接口契约参考-FY-Hospital-API.md）。
+ * 事件接口（§3 事件管理模块，契约唯一依据 = docs/FY-Hospital-API-v3.90.md）。
  * 当前范围：3.1 today 分页 / 3.2 grouped 聚合 / 3.4 stats 统计 / 3.10 handle / 3.9 sync
- * / 今日等级分布。楼栋、箱柜、设备级接口随 4.2~4.5 页面补充；映射纯函数见 ./mappers。
+ * / 今日等级分布（契约无「今日×等级」现成接口，由 3.1 真实计数归并）。
+ * 楼栋(3.7/3.8)、箱柜(3.5)、设备级(3.3/3.4) 接口随 4.2~4.5 页面按文档逐条补；
+ * 映射纯函数见 ./mappers。实现不参考福永 api 层代码（仅结构对照）。
  */
 import { bzGet, bzPost, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import { KeyedMemoryCache, MemoryCache } from '../../utils/cache'
@@ -9,10 +11,13 @@ import { runWithConcurrency } from '../../utils/concurrency'
 import type { AlertEventLevel } from '../hospital/types'
 import type {
   DeviceEventGroup,
+  EventBrief,
   EventInfo,
+  EventLevelStats,
   EventStatsResult,
   EventStatsVo,
   PageResult,
+  SuperDeviceAlarmStats,
 } from './types'
 import { briefToEventInfo, coerceEventBrief, coerceEventInfo, normalizeEventLevel } from './mappers'
 
@@ -78,12 +83,11 @@ function normalizeDeviceEventGroup(raw: unknown): DeviceEventGroup | null {
         .filter((e): e is EventInfo => e != null)
     : []
   const latestTimeStr =
-    String(o.latestTimeStr ?? o.LatestTimeStr ?? '') ||
     events.reduce((best, e) => ((e.timeStr || '') > best ? e.timeStr : best), '') ||
     formatTsMs(Number(o.latestTsMs ?? 0))
   return {
-    deviceName: String(o.deviceName ?? o.DeviceName ?? ''),
-    deviceId: String(o.deviceId ?? o.DeviceId ?? ''),
+    deviceName: String(o.deviceName ?? ''),
+    deviceId: String(o.deviceId ?? ''),
     count: Number(o.count ?? events.length) || 0,
     latestTsMs: Number(o.latestTsMs ?? 0),
     latestTimeStr,
@@ -123,60 +127,45 @@ export function clearEventCache() {
 }
 
 function normalizeEventStatsVo(raw: unknown): EventStatsVo {
+  // §3.6 契约字段（camelCase，handleRate 无告警时为 0.00）；不做大小写兜底
   const o = (raw ?? {}) as Record<string, unknown>
-  const num = (camel: string, pascal: string) => {
-    const v = o[camel] ?? o[pascal]
-    const n = Number(v)
+  const num = (key: string): number => {
+    const n = Number(o[key])
     return Number.isFinite(n) ? n : 0
   }
-  const rateRaw = o.handleRate ?? o.HandleRate
-  const handleRate = rateRaw == null ? undefined : Number(rateRaw)
+  const handleRate = Number(o.handleRate)
   return {
-    totalAlarmCount: num('totalAlarmCount', 'TotalAlarmCount'),
-    todayAlarmCount: num('todayAlarmCount', 'TodayAlarmCount'),
-    unhandledAlarmCount: num('unhandledAlarmCount', 'UnhandledAlarmCount'),
+    totalAlarmCount: num('totalAlarmCount'),
+    todayAlarmCount: num('todayAlarmCount'),
+    unhandledAlarmCount: num('unhandledAlarmCount'),
     handleRate: Number.isFinite(handleRate) ? handleRate : undefined,
-    urgentCount: num('urgentCount', 'UrgentCount'),
-    criticalCount: num('criticalCount', 'CriticalCount'),
-    normalCount: num('normalCount', 'NormalCount'),
-    infoCount: num('infoCount', 'InfoCount'),
-    cacheTs: num('cacheTs', 'CacheTs') || undefined,
-    error: String(o.error ?? o.Error ?? '') || undefined,
+    urgentCount: num('urgentCount'),
+    criticalCount: num('criticalCount'),
+    normalCount: num('normalCount'),
+    infoCount: num('infoCount'),
+    cacheTs: num('cacheTs') || undefined,
+    error: String(o.error ?? '') || undefined,
   }
 }
 
-function mapEventStats(raw: EventStatsVo | EventStatsResult): EventStatsResult {
-  const vo =
-    typeof (raw as EventStatsVo).totalAlarmCount === 'number'
-      ? (raw as EventStatsVo)
-      : normalizeEventStatsVo(raw)
-  if (typeof vo.totalAlarmCount === 'number') {
-    return {
-      day: new Date().toISOString().slice(0, 10),
-      totalEvents: Number(vo.totalAlarmCount) || 0,
-      unhandledEvents: Number(vo.unhandledAlarmCount) || 0,
-      todayAlarmCount: Number(vo.todayAlarmCount) || 0,
-      handleRate: Number.isFinite(vo.handleRate) ? Number(vo.handleRate) : undefined,
-      urgentCount: Number(vo.urgentCount) || 0,
-      criticalCount: Number(vo.criticalCount) || 0,
-      levelDistribution: {
-        '1': Number(vo.urgentCount) || 0,
-        '2': Number(vo.criticalCount) || 0,
-        '3': Number(vo.normalCount) || 0,
-        '4': Number(vo.infoCount) || 0,
-      },
-      typeDistribution: {},
-      cacheTs: Number(vo.cacheTs) || undefined,
-      error: vo.error ? String(vo.error) : undefined,
-    }
-  }
-  const old = raw as EventStatsResult
+function mapEventStats(vo: EventStatsVo): EventStatsResult {
   return {
-    ...old,
-    todayAlarmCount: old.todayAlarmCount ?? 0,
-    handleRate: old.handleRate,
-    urgentCount: old.urgentCount ?? Number(old.levelDistribution?.['1'] ?? 0),
-    criticalCount: old.criticalCount ?? Number(old.levelDistribution?.['2'] ?? 0),
+    day: new Date().toISOString().slice(0, 10),
+    totalEvents: Number(vo.totalAlarmCount) || 0,
+    unhandledEvents: Number(vo.unhandledAlarmCount) || 0,
+    todayAlarmCount: Number(vo.todayAlarmCount) || 0,
+    handleRate: Number.isFinite(vo.handleRate) ? Number(vo.handleRate) : undefined,
+    urgentCount: Number(vo.urgentCount) || 0,
+    criticalCount: Number(vo.criticalCount) || 0,
+    levelDistribution: {
+      '1': Number(vo.urgentCount) || 0,
+      '2': Number(vo.criticalCount) || 0,
+      '3': Number(vo.normalCount) || 0,
+      '4': Number(vo.infoCount) || 0,
+    },
+    typeDistribution: {},
+    cacheTs: Number(vo.cacheTs) || undefined,
+    error: vo.error ? String(vo.error) : undefined,
   }
 }
 
@@ -186,6 +175,63 @@ export async function fetchEventStats(force = false): Promise<EventStatsResult> 
     async () => mapEventStats(normalizeEventStatsVo(await eventGet<unknown>('/event/stats'))),
     force,
   )
+}
+
+/** §3.3 按设备查询历史告警（GET /event/devices/{deviceId}/events，按时间降序） */
+export async function fetchDeviceHistoryEvents(deviceId: number): Promise<EventBrief[]> {
+  if (!deviceId) return []
+  const data = await eventGet<unknown[]>(`/event/devices/${deviceId}/events`)
+  return (data ?? []).map(coerceEventBrief).filter((e): e is EventBrief => e != null)
+}
+
+/** §3.4 按设备统计历史告警数（GET /event/devices/{deviceId}/count，全部事件口径） */
+export async function fetchDeviceEventCount(deviceId: number): Promise<number> {
+  if (!deviceId) return 0
+  const data = await eventGet<unknown>(`/event/devices/${deviceId}/count`)
+  return Number(data) || 0
+}
+
+/** §3.5 箱柜分等级历史告警统计（失败降级全 0，弹窗头不阻断） */
+export async function fetchSuperDeviceLevelCounts(superId: number): Promise<SuperDeviceAlarmStats> {
+  if (!superId) return normalizeSuperDeviceAlarmStats(null)
+  try {
+    return normalizeSuperDeviceAlarmStats(
+      await eventGet<unknown>(`/event/super-devices/${superId}/level-counts`),
+    )
+  } catch {
+    return normalizeSuperDeviceAlarmStats(null)
+  }
+}
+
+/** §3.5 五字段归一（total 缺失时回退为四级合计） */
+export function normalizeSuperDeviceAlarmStats(raw: unknown): SuperDeviceAlarmStats {
+  const o = (raw ?? {}) as Record<string, unknown>
+  const num = (key: string): number => {
+    const n = Number(o[key])
+    return Number.isFinite(n) ? n : 0
+  }
+  const stats: SuperDeviceAlarmStats = {
+    totalAlarmCount: num('totalAlarmCount'),
+    urgentCount: num('urgentCount'),
+    criticalCount: num('criticalCount'),
+    normalCount: num('normalCount'),
+    infoCount: num('infoCount'),
+  }
+  if (!stats.totalAlarmCount) {
+    stats.totalAlarmCount =
+      stats.urgentCount + stats.criticalCount + stats.normalCount + stats.infoCount
+  }
+  return stats
+}
+
+/** 箱柜分等级统计 → 四级行（固定顺序，缺级补 0） */
+export function toEventLevelStats(stats: SuperDeviceAlarmStats): EventLevelStats[] {
+  return [
+    { eventLevel: 1, count: stats.urgentCount },
+    { eventLevel: 2, count: stats.criticalCount },
+    { eventLevel: 3, count: stats.normalCount },
+    { eventLevel: 4, count: stats.infoCount },
+  ]
 }
 
 /** 今日告警等级分布（§3.1 真实计数归并） */

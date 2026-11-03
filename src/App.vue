@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { NConfigProvider, NMessageProvider, zhCN, dateZhCN } from 'naive-ui'
 import TopBar from './components/TopBar.vue'
+import MessageBridge from './components/MessageBridge.vue'
+import { themeOverrides } from './styles/naiveTheme'
 import { usePageTabsStore } from './store/pageTabs'
 import { navConfig } from './config/navConfig'
 
@@ -16,7 +19,7 @@ function syncTabFromRoute() {
 watch(() => route.path, syncTabFromRoute, { immediate: true })
 
 // keep-alive 按组件名匹配：页面实装一个加一个（与 router REAL_PAGES 同步登记）
-const keepAliveInclude = ['PowerRoomPage', 'AlertCenterPage']
+const keepAliveInclude = ['PowerRoomPage', 'AlertCenterPage', 'DeviceManagementPage']
 
 // 整个应用作为 1920×1080 画布等比缩放居中（16:9 铺满，其他比例留对称边）
 const scale = ref(1)
@@ -34,22 +37,35 @@ onBeforeUnmount(() => ro?.disconnect())
 </script>
 
 <template>
-  <div class="app-shell">
-    <div class="stage" :style="{ transform: `scale(${scale})` }">
-      <!-- 内容区铺满整个 1920×1080（3D 全屏铺底） -->
-      <main class="app-main">
-        <router-view v-slot="{ Component }">
-          <keep-alive :include="keepAliveInclude">
-            <component :is="Component" />
-          </keep-alive>
-        </router-view>
-      </main>
-      <TopBar />
-    </div>
-  </div>
+  <n-config-provider
+    class="app-provider"
+    :theme-overrides="themeOverrides"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+  >
+    <n-message-provider>
+      <MessageBridge />
+      <div class="app-shell">
+        <div class="stage" :style="{ transform: `scale(${scale})` }">
+          <!-- 内容区铺满整个 1920×1080（3D 全屏铺底） -->
+          <main class="app-main">
+            <router-view v-slot="{ Component }">
+              <keep-alive :include="keepAliveInclude">
+                <component :is="Component" />
+              </keep-alive>
+            </router-view>
+          </main>
+          <TopBar />
+        </div>
+      </div>
+    </n-message-provider>
+  </n-config-provider>
 </template>
 
 <style scoped>
+.app-provider {
+  height: 100%;
+}
 .app-shell {
   width: 100%;
   height: 100%;

@@ -1,8 +1,11 @@
 # src/mock — 宝中占位假数据（唯一出处）
 
-后端未就绪期间的占位层。接口契约照搬福永（见 `docs/福永接口契约参考-*.md`）。
+后端未就绪期间的占位层。**api 契约唯一依据 = `docs/FY-Hospital-API-v3.90.md`（用户提供的权威文档）**，
+认证中心见 `docs/福永接口契约参考-Operation-Platform-API.md`；福永的 api 层实现不作依据（有用错用混前科）。
 真后端就绪后：`.env.development` 的 `VITE_USE_MOCK=false` 即切真联调；
 稳定上线后**删除本目录即退役**，业务代码零残留。
+
+**WS 消息名只认文档 §5.1 三种：`today_events` / `event` / `event_handled`**（4.5 移植 eventPushSocket 时白名单照此收窄）。
 
 ## 开关与接线
 

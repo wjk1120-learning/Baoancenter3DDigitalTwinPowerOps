@@ -10,10 +10,11 @@ export interface PageTab {
   name: string
 }
 
-/** 全局只保留一个标签的页面（忽略 query 差异，复用已有标签；/device-model 随 4.3 加入） */
+/** 全局只保留一个标签的页面（忽略 query 差异，复用已有标签） */
 const SINGLETON_BASES = new Set([
   '/hospital',
   '/device',
+  '/device-model',
   '/alert',
   '/defect',
   '/power-room',

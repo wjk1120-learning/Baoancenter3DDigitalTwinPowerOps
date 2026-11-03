@@ -3,7 +3,9 @@ import type { AlertLocation, DeviceEventGroup, EventBrief, EventInfo } from './t
 
 /**
  * 事件映射纯函数（无网络、无缓存，带单测）：EventBrief/EventInfo ↔ AlertItem/AlertDetail、
- * 等级与处理状态归一、字段大小写容错。取自福永 api/event/event.ts 的纯函数层按宝安规范拆出。
+ * 等级与处理状态归一。
+ * 契约唯一依据 = docs/FY-Hospital-API-v3.90.md（§3 事件 / §5.1 WS 消息）；字段只认文档
+ * 所载（camelCase），不做福永式大小写兜底/野字段兜底/已下线字段兼容。
  */
 
 /** 3.1/3.2/3.3 等为 EventBrief；内部仍用 EventInfo 供既有映射复用 */
@@ -106,50 +108,50 @@ export function parseAlertLocations(raw: unknown): AlertLocation[] | null {
   for (const it of raw) {
     if (!it || typeof it !== 'object') continue
     const o = it as Record<string, unknown>
-    const building = Number(o.building ?? o.Building)
-    const floor = String(o.floor ?? o.Floor ?? '').trim()
+    const building = Number(o.building)
+    const floor = String(o.floor ?? '').trim()
     if (!Number.isFinite(building) || building <= 0 || !floor) continue
     out.push({ building, floor })
   }
   return out.length ? out : null
 }
 
-/** REST EventBrief（3.1/3.2/3.3）字段归一化 */
+/** REST EventBrief（§3.1/3.2/3.3）字段归一化（契约字段：eventId/timeStr/eventLevel/deviceName/description/handleStatus/locations） */
 export function coerceEventBrief(raw: unknown): EventBrief | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
-  const eventId = String(o.eventId ?? o.EventId ?? '')
-  const deviceName = String(o.deviceName ?? o.DeviceName ?? '')
-  const description = String(o.description ?? o.Description ?? o.title ?? '')
+  const eventId = String(o.eventId ?? '')
+  const deviceName = String(o.deviceName ?? '')
+  const description = String(o.description ?? '')
   if (!eventId && !deviceName && !description) return null
   return {
-    eventId: eventId || `evt-${Date.now()}`,
-    timeStr: String(o.timeStr ?? o.TimeStr ?? o.time ?? ''),
-    eventLevel: Number(o.eventLevel ?? o.EventLevel ?? 3),
+    eventId,
+    timeStr: String(o.timeStr ?? ''),
+    eventLevel: Number(o.eventLevel ?? 3),
     deviceName,
     description,
-    handleStatus: Number(o.handleStatus ?? o.HandleStatus ?? 0),
-    locations: parseAlertLocations(o.locations ?? o.Locations),
+    handleStatus: Number(o.handleStatus ?? 0),
+    locations: parseAlertLocations(o.locations),
   }
 }
 
-/** 兼容 WS 推送字段大小写差异（event_list / event 共用） */
+/** WS EventInfo（§5.1 推送完整结构）字段归一化 */
 export function coerceEventInfo(raw: unknown): EventInfo | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
-  const eventId = String(o.eventId ?? o.EventId ?? '')
-  const deviceName = String(o.deviceName ?? o.DeviceName ?? '')
-  const description = String(o.description ?? o.title ?? '')
-  const locations = parseAlertLocations(o.locations ?? o.Locations)
+  const eventId = String(o.eventId ?? '')
+  const deviceName = String(o.deviceName ?? '')
+  const description = String(o.description ?? '')
+  const locations = parseAlertLocations(o.locations)
   if (!eventId && !deviceName && !description && !locations?.length) return null
   return {
-    eventId: eventId || `evt-${o.tsMs ?? Date.now()}`,
+    eventId,
     tsMs: Number(o.tsMs ?? 0),
-    timeStr: String(o.timeStr ?? o.time ?? ''),
+    timeStr: String(o.timeStr ?? ''),
     eventLevel: Number(o.eventLevel ?? 3),
     eventType: String(o.eventType ?? ''),
     alarmKind: String(o.alarmKind ?? ''),
-    deviceId: String(o.deviceId ?? o.DeviceId ?? ''),
+    deviceId: String(o.deviceId ?? ''),
     deviceName,
     stationId: String(o.stationId ?? ''),
     description,

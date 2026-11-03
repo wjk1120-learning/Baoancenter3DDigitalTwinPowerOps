@@ -1,5 +1,18 @@
 import type { EventBrief } from '../api/event/types'
 import { eventRows } from './data/event'
+import {
+  buildings,
+  getDevicesBySuper,
+  getEventCountByDevice,
+  getEventsByDevice,
+  getHealthLevelStats,
+  getLevelCountsBySuper,
+  getMeasurementsByDeviceId,
+  getSuperCount,
+  getSuperPage,
+  searchDevices,
+  searchSupers,
+} from './data/device'
 
 export interface MockCallContext {
   /** :参数 路径段（如 /event/:eventId/handle 的 eventId） */
@@ -76,7 +89,9 @@ const routes: MockRoute[] = [
     }
   }),
 
-  // 3.10 标记事件已处理（改数据数组，stats/grouped 联动）
+  // 3.10 标记事件已处理（改数据数组，stats/grouped 联动）。
+  // 文档语义：真实后端会级联处理同箱柜全部未处理事件（§3.10）；mock 数据无箱柜关联字段，
+  // 仅翻当前事件——联调切真后以真后端级联结果为准
   route('POST /event/:eventId/handle', ({ params }) => {
     const hit = eventRows.find((e) => e.eventId === params.eventId)
     if (!hit) return false
@@ -86,6 +101,42 @@ const routes: MockRoute[] = [
 
   // 3.9 手动触发事件同步（恒返 0 = 互斥跳过语义）
   route('POST /event/sync', () => 0),
+
+  // ── 设备管理（§1，用户拍板范围：无配电房级联/无 1.14-1.16/无导出）──
+  // §1.2 楼栋列表
+  route('GET /device/buildings', () => buildings),
+  // §1.4 箱柜分页（buildingId 可选；有开关优先→ID 升序）
+  route('GET /device/super-devices', ({ query }) => getSuperPage(query)),
+  // §1.5 箱柜计数
+  route('GET /device/super-devices/count', ({ query }) => getSuperCount(query)),
+  // §1.7 箱柜下设备明细分页
+  route('GET /device/super-devices/:superId/devices', ({ params, query }) =>
+    getDevicesBySuper(query, Number(params.superId)),
+  ),
+  // §1.9 设备名模糊检索
+  route('GET /device/search', ({ query }) => searchDevices(query)),
+  // §1.10 柜名模糊检索
+  route('GET /device/super-devices/search', ({ query }) => searchSupers(query)),
+  // §1.11 测点明细（按需请求：点位弹窗点击时才发）
+  route('GET /device/:deviceId/measurements', ({ params }) =>
+    getMeasurementsByDeviceId(Number(params.deviceId)),
+  ),
+  // §1.12 健康度五档统计
+  route('GET /device/health/level-stats', ({ query }) => getHealthLevelStats(query)),
+
+  // ── 事件侧按设备/按柜查询（4.2④ 点位告警抽屉按需请求）──
+  // §3.3 设备历史告警
+  route('GET /event/devices/:deviceId/events', ({ params }) =>
+    getEventsByDevice(Number(params.deviceId)),
+  ),
+  // §3.4 设备告警计数
+  route('GET /event/devices/:deviceId/count', ({ params }) =>
+    getEventCountByDevice(Number(params.deviceId)),
+  ),
+  // §3.5 箱柜分等级统计
+  route('GET /event/super-devices/:superId/level-counts', ({ params }) =>
+    getLevelCountsBySuper(Number(params.superId)),
+  ),
 ]
 
 /** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */

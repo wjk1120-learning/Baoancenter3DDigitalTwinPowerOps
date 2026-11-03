@@ -1,223 +1,294 @@
 <script setup lang="ts">
-import { eventLevelLabel, groupLatestTime } from '../../api/event/mappers'
-import { useAlertCenter } from './composables/useAlertCenter'
+import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
+import type { AlertEventLevel, AlertItem } from '../../api/hospital/types'
+import {
+  fetchEventGroupedByLevel,
+  fetchEventGrouped,
+  fetchEventStats,
+  handleEvent,
+} from '../../api/event/event'
+import { groupLatestTime, mapEventInfoToAlert } from '../../api/event/mappers'
+import type { DeviceEventGroup, EventInfo, EventStatsResult } from '../../api/event/types'
+import { saveAlertSnapshot } from '../../config/alertDetail'
+import { distCount, gradeOf, groupCount } from './composables/groupMeta'
+import AlertStatsCharts from './components/AlertStatsCharts.vue'
+import AlertDetailDrawer from './components/AlertDetailDrawer.vue'
+import AlertKpiBar from './components/AlertKpiBar.vue'
+import AlertGroupsTable from './components/AlertGroupsTable.vue'
+import AlertGroupModal from './components/AlertGroupModal.vue'
 
-// 告警中心（4.1② 骨架：统计条 + 分组列表；分组展开/图表/详情抽屉/处理随 4.1③ 补）
+// 告警中心（福永 AlertCenterPage 同构；实时 store 接线随 4.5 面板任务补，当前列表/统计直连 api/event）
 defineOptions({ name: 'AlertCenterPage' })
 
-const { stats, groups, loading, error, refresh } = useAlertCenter()
+const detailAlert = ref<AlertItem | null>(null)
+const loading = ref(false)
+const filterLevel = ref<'' | '1' | '2' | '3' | '4'>('')
+const page = ref(1)
+const pageSize = 14
+/** 列表数据：3.2 GET /event/grouped；按等级筛选为 grouped?level= */
+const listGroups = ref<DeviceEventGroup[]>([])
+/** 刷新令牌：每次 loadList 自增，驱动「今日告警分布」饼图重取 §3.1 */
+const statsTick = ref(0)
+const eventStats = ref<EventStatsResult | null>(null)
+
+async function loadList(force = false) {
+  loading.value = true
+  page.value = 1
+  try {
+    if (!filterLevel.value) {
+      listGroups.value = await fetchEventGrouped(force)
+    } else {
+      listGroups.value = await fetchEventGroupedByLevel(Number(filterLevel.value))
+    }
+    // 统计仍用全量 stats，避免等级筛选时 KPI 失真
+    eventStats.value = await fetchEventStats(force || !!filterLevel.value)
+  } catch {
+    listGroups.value = []
+  } finally {
+    loading.value = false
+    statsTick.value++
+  }
+}
+
+// keep-alive 组件首次挂载必紧跟 onActivated，统一在 activated 里加载避免首屏双拉
+onMounted(() => {
+  window.addEventListener('keydown', onEsc)
+})
+onActivated(() => {
+  void loadList(false)
+})
+onUnmounted(() => window.removeEventListener('keydown', onEsc))
+
+const filtered = computed(() =>
+  [...listGroups.value].sort((a, b) => groupLatestTime(b).localeCompare(groupLatestTime(a))),
+)
+
+const gradeCounts = computed(() => {
+  const counts: Record<AlertEventLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }
+  const stats = eventStats.value
+  if (stats && !filterLevel.value) {
+    const dist = stats.levelDistribution ?? {}
+    counts[1] = distCount(dist, 1)
+    counts[2] = distCount(dist, 2)
+    counts[3] = distCount(dist, 3)
+    counts[4] = distCount(dist, 4)
+    if (counts[1] + counts[2] + counts[3] + counts[4] > 0) return counts
+  }
+  for (const g of filtered.value) counts[gradeOf(g)] += groupCount(g) || 1
+  return counts
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+const paged = computed(() =>
+  filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize),
+)
+
+const unhandled = computed(() => {
+  const stats = eventStats.value
+  if (stats && !filterLevel.value) return Number(stats.unhandledEvents) || 0
+  return 0
+})
+const urgent = computed(() => {
+  const stats = eventStats.value
+  if (stats && !filterLevel.value) {
+    const dist = stats.levelDistribution ?? {}
+    const lv1 = Number(dist['1'] ?? dist[1 as unknown as string] ?? 0)
+    if (lv1 > 0) return lv1
+  }
+  return filtered.value
+    .filter((g) => gradeOf(g) === 1)
+    .reduce((s, g) => s + (groupCount(g) || 1), 0)
+})
+const todayAlerts = computed(() => Number(eventStats.value?.todayAlarmCount) || 0)
+const totalAlerts = computed(() => {
+  const fromStats = Number(eventStats.value?.totalEvents)
+  if (fromStats > 0) return fromStats
+  return listGroups.value.reduce((s, g) => s + groupCount(g), 0)
+})
+const handledRate = computed(() => {
+  const stats = eventStats.value
+  // 后端 v3.15+ 直接返回 handleRate（更准确），优先用；无值时退回本地估算
+  if (stats && Number.isFinite(stats.handleRate)) return Number(stats.handleRate)
+  const total = Number(stats?.totalEvents) || totalAlerts.value
+  const open = Number(stats?.unhandledEvents) || 0
+  return total ? ((total - open) / total) * 100 : 0
+})
+
+const activeGroup = ref<DeviceEventGroup | null>(null)
+
+function openGroup(g: DeviceEventGroup) {
+  activeGroup.value = g
+}
+function closeGroup() {
+  activeGroup.value = null
+}
+
+function onEsc(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  if (detailAlert.value) {
+    e.preventDefault()
+    closeDetailDrawer()
+    return
+  }
+  if (!activeGroup.value) return
+  e.preventDefault()
+  closeGroup()
+}
+
+function openEventDetail(e: EventInfo) {
+  const group = activeGroup.value
+  const item = mapEventInfoToAlert({
+    ...e,
+    deviceId: e.deviceId || group?.deviceId || '',
+    deviceName: e.deviceName || group?.deviceName || '',
+  })
+  saveAlertSnapshot(item)
+  detailAlert.value = item
+}
+
+function closeDetailDrawer() {
+  detailAlert.value = null
+}
+
+const handlingIds = ref<Record<string, boolean>>({})
+async function handleOne(eventId: string) {
+  const id = String(eventId || '').trim()
+  if (!id || handlingIds.value[id]) return
+  handlingIds.value = { ...handlingIds.value, [id]: true }
+  try {
+    const ok = await handleEvent(id)
+    if (ok) {
+      listGroups.value = listGroups.value.map((g) => ({
+        ...g,
+        events: (g.events ?? []).map((e) => (e.eventId === id ? { ...e, handleStatus: 1 } : e)),
+      }))
+      if (activeGroup.value) {
+        activeGroup.value = {
+          ...activeGroup.value,
+          events: (activeGroup.value.events ?? []).map((e) =>
+            e.eventId === id ? { ...e, handleStatus: 1 } : e,
+          ),
+        }
+      }
+    }
+  } finally {
+    const next = { ...handlingIds.value }
+    delete next[id]
+    handlingIds.value = next
+  }
+}
+
+function onFilterLevelChange() {
+  void loadList()
+}
 </script>
 
 <template>
-  <div class="page">
-    <header class="stats-bar">
-      <div class="stat">
-        <span class="num">{{ stats?.totalEvents ?? '—' }}</span>
-        <span class="cap">告警总数</span>
-      </div>
-      <div class="stat">
-        <span class="num warn-text">{{ stats?.unhandledEvents ?? '—' }}</span>
-        <span class="cap">未处理</span>
-      </div>
-      <div class="stat">
-        <span class="num">{{ stats?.handleRate ?? '—' }}<i v-if="stats?.handleRate != null" class="unit">%</i></span>
-        <span class="cap">处理率</span>
-      </div>
-      <div class="stat">
-        <span class="num danger-text">{{ stats?.urgentCount ?? '—' }}</span>
-        <span class="cap">紧急</span>
-      </div>
-      <div class="stat">
-        <span class="num">{{ stats?.criticalCount ?? '—' }}</span>
-        <span class="cap">严重</span>
-      </div>
-      <button class="refresh" :disabled="loading" @click="refresh(true)">
-        {{ loading ? '加载中…' : '刷新' }}
-      </button>
-    </header>
+  <div class="ac-page">
+    <div class="dm-bg" aria-hidden="true">
+      <div class="dm-bg-grid" />
+      <div class="dm-bg-glow a" />
+      <div class="dm-bg-glow b" />
+    </div>
 
-    <main class="groups">
-      <p v-if="error" class="tip">加载失败：{{ error }}</p>
-      <p v-if="!loading && !groups.length && !error" class="tip">暂无告警</p>
+    <div class="ac-wrap">
+      <AlertKpiBar
+        :total="totalAlerts"
+        :today="todayAlerts"
+        :unhandled="unhandled"
+        :urgent="urgent"
+        :rate="handledRate"
+      />
 
-      <section v-for="g in groups" :key="g.deviceName" class="group">
-        <header class="group-head">
-          <span class="device">{{ g.deviceName }}</span>
-          <span class="badge" :class="g.highestLevel === 1 ? 'error' : 'warn'">
-            {{ eventLevelLabel(g.highestLevel) }}
-          </span>
-          <span class="meta">共 {{ g.count }} 条 · 最新 {{ groupLatestTime(g) }}</span>
-        </header>
-        <ul class="events">
-          <li v-for="e in g.events.slice(0, 3)" :key="e.eventId">
-            <span class="time">{{ e.timeStr }}</span>
-            <span class="desc">{{ e.description }}</span>
-            <span class="status" :class="{ done: e.handleStatus === 1 }">
-              {{ e.handleStatus === 1 ? '已处理' : '未处理' }}
-            </span>
-          </li>
-        </ul>
-        <p v-if="g.events.length > 3" class="more">还有 {{ g.events.length - 3 }} 条…</p>
-      </section>
-    </main>
+      <div class="ac-body">
+        <AlertStatsCharts :grade-counts="gradeCounts" :refresh-token="statsTick" />
+
+        <AlertGroupsTable
+          v-model:filter-level="filterLevel"
+          :rows="paged"
+          :total="filtered.length"
+          :page="page"
+          :total-pages="totalPages"
+          :loading="loading"
+          @update:filter-level="onFilterLevelChange"
+          @refresh="loadList(true)"
+          @open="openGroup"
+          @page="page = $event"
+        />
+      </div>
+    </div>
+
+    <AlertGroupModal
+      :group="activeGroup"
+      :handling-ids="handlingIds"
+      @close="closeGroup"
+      @handle="handleOne"
+      @detail="openEventDetail"
+    />
+
+    <AlertDetailDrawer :alert="detailAlert" @close="closeDetailDrawer" />
   </div>
 </template>
 
 <style scoped>
-.page {
+.ac-page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+.ac-page .dm-bg {
   position: absolute;
   inset: 0;
-  top: var(--topbar-height);
-  padding: 16px 24px 24px;
-  overflow: auto;
+  z-index: 0;
+  background:
+    radial-gradient(900px 520px at 12% 6%, rgba(76, 208, 232, 0.11), transparent 58%),
+    radial-gradient(780px 480px at 92% 94%, rgba(43, 124, 227, 0.09), transparent 58%),
+    linear-gradient(165deg, var(--bg-1), var(--bg-2));
 }
-.stats-bar {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
+.ac-page .dm-bg-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(43, 124, 227, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 124, 227, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
-.stat {
-  flex: none;
-  min-width: 110px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 18px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 4px 12px rgba(43, 108, 160, 0.08);
+.ac-page .dm-bg-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
 }
-.num {
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--title);
+.ac-page .dm-bg-glow.a {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  left: -100px;
+  background: var(--primary);
 }
-.num .unit {
-  font-style: normal;
-  font-size: 14px;
-  margin-left: 2px;
+.ac-page .dm-bg-glow.b {
+  width: 380px;
+  height: 380px;
+  bottom: -120px;
+  right: -100px;
+  background: var(--cyan);
 }
-.warn-text {
-  color: var(--warn-text);
-}
-.danger-text {
-  color: var(--danger);
-}
-.cap {
-  font-size: 12px;
-  color: var(--muted);
-}
-.refresh {
-  margin-left: auto;
-  align-self: center;
-  padding: 8px 18px;
-  border: 1px solid var(--primary);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--primary);
-  font-size: 14px;
-  cursor: pointer;
-}
-.refresh:hover {
-  background: var(--primary-50);
-}
-.refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.groups {
+.ac-wrap {
+  position: relative;
+  z-index: 5;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  padding: calc(var(--topbar-height) + 14px) 18px 18px;
+  gap: 14px;
 }
-.tip {
-  padding: 24px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 15px;
-}
-.group {
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 4px 12px rgba(43, 108, 160, 0.08);
-  overflow: hidden;
-}
-.group-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--primary-50);
-}
-.device {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--title);
-}
-.badge {
-  flex: none;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 2px 10px;
-  border-radius: 999px;
-}
-.badge.error {
-  color: var(--danger-text);
-  background: rgba(229, 72, 77, 0.14);
-}
-.badge.warn {
-  color: var(--warn-text);
-  background: rgba(232, 168, 56, 0.16);
-}
-.meta {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--muted);
-}
-.events {
-  margin: 0;
-  padding: 4px 16px;
-  list-style: none;
-}
-.events li {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 7px 0;
-  font-size: 14px;
-  border-bottom: 1px dashed var(--primary-50);
-}
-.events li:last-child {
-  border-bottom: none;
-}
-.time {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--muted);
-}
-.desc {
+.ac-body {
   flex: 1;
-  min-width: 0;
-  color: var(--text);
-}
-.status {
-  flex: none;
-  font-size: 12px;
-  color: var(--warn-text);
-}
-.status.done {
-  color: var(--muted);
-}
-.more {
-  margin: 0;
-  padding: 6px 16px 10px;
-  font-size: 12px;
-  color: var(--muted);
+  min-height: 0;
+  display: flex;
+  gap: 14px;
 }
 </style>

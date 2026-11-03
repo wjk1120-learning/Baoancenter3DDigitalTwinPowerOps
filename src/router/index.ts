@@ -10,6 +10,7 @@ const placeholderPage = () => import('../views/placeholder/PlaceholderPage.vue')
 const REAL_PAGES: Record<string, () => Promise<Component>> = {
   'power-room': () => import('../views/power-room/PowerRoomPage.vue'),
   alert: () => import('../views/alert-center/AlertCenterPage.vue'),
+  device: () => import('../views/device-management/DeviceManagementPage.vue'),
 }
 
 /**
@@ -29,6 +30,8 @@ const router = createRouter({
         component: REAL_PAGES[item.id] ?? placeholderPage,
         meta: { keepAlive: item.id in REAL_PAGES },
       })),
+    // 设备详情：柜行「详情」跳转目标（福永 /device-model 同款）；页面 4.3 实装后换 DeviceModelPage
+    { path: '/device-model', component: placeholderPage, props: { name: '设备详情' } },
     // 调试页仅 dev 注册（import.meta.env.DEV 构建期替换，生产不含此 chunk）
     ...(import.meta.env.DEV
       ? [{ path: '/tests/mock', component: () => import('../tests/MockDebugPage.vue') }]

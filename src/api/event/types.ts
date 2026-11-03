@@ -76,10 +76,7 @@ export interface EventStatsResult {
   error?: string
 }
 
-export interface PageResult<T> {
-  total: number
-  rows: T[]
-}
+export type { PageResult } from '../shared'
 
 export interface DeviceEventGroup {
   deviceName: string
