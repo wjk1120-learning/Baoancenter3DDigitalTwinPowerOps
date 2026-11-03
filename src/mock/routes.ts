@@ -1,0 +1,114 @@
+import type { EventBrief } from '../api/event/types'
+import { eventRows } from './data/event'
+
+export interface MockCallContext {
+  /** :参数 路径段（如 /event/:eventId/handle 的 eventId） */
+  params: Record<string, string>
+  /** URL search + axios params 合并后的查询串（值均字符串化） */
+  query: Record<string, string>
+  /** POST body（JSON 已解析） */
+  body?: unknown
+}
+
+interface MockRoute {
+  method: string
+  segments: string[]
+  handler: (ctx: MockCallContext) => unknown
+}
+
+function route(key: string, handler: (ctx: MockCallContext) => unknown): MockRoute {
+  const [method, path] = key.split(' ')
+  return { method, segments: path.split('/').filter(Boolean), handler }
+}
+
+function toInt(v: string | undefined, fallback: number): number {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
+}
+
+/**
+ * mock 路由表：'方法 路径' → 处理函数。路径段支持 :参数。
+ * 未登记的接口 = 页面拿到空信封（见 mockAdapter），缺口随阶段 4 页面逐个补。
+ */
+const routes: MockRoute[] = [
+  // 3.1 今日告警分页（GET /event/today?page&pageSize，按时间倒序）
+  route('GET /event/today', ({ query }) => {
+    const page = toInt(query.page, 1)
+    const pageSize = toInt(query.pageSize, 2000)
+    const rows = [...eventRows].sort((a, b) => b.timeStr.localeCompare(a.timeStr))
+    return { total: rows.length, rows: rows.slice((page - 1) * pageSize, page * pageSize) }
+  }),
+
+  // 3.2 按设备聚合（?level= 过滤，缺省全量；组内 events 即 EventBrief 列表）
+  route('GET /event/grouped', ({ query }) => {
+    const level = query.level != null && query.level !== '' ? Number(query.level) : null
+    const pool = eventRows.filter((e) => level == null || e.eventLevel === level)
+    const byDevice = new Map<string, EventBrief[]>()
+    for (const e of pool) {
+      const list = byDevice.get(e.deviceName) ?? []
+      list.push(e)
+      byDevice.set(e.deviceName, list)
+    }
+    return [...byDevice.entries()].map(([deviceName, list]) => ({
+      deviceName,
+      deviceId: '',
+      count: list.length,
+      latestTsMs: Date.parse(list[0]!.timeStr.replace(/-/g, '/')) || 0,
+      highestLevel: Math.min(...list.map((e) => e.eventLevel)),
+      events: list,
+    }))
+  }),
+
+  // 3.4 分级统计（从同一份数据实时汇总）
+  route('GET /event/stats', () => {
+    const total = eventRows.length
+    const unhandled = eventRows.filter((e) => e.handleStatus === 0).length
+    const by = (lv: number) => eventRows.filter((e) => e.eventLevel === lv).length
+    return {
+      totalAlarmCount: total,
+      todayAlarmCount: total,
+      unhandledAlarmCount: unhandled,
+      handleRate: total > 0 ? Math.round(((total - unhandled) / total) * 10000) / 100 : 100,
+      urgentCount: by(1),
+      criticalCount: by(2),
+      normalCount: by(3),
+      infoCount: by(4),
+    }
+  }),
+
+  // 3.10 标记事件已处理（改数据数组，stats/grouped 联动）
+  route('POST /event/:eventId/handle', ({ params }) => {
+    const hit = eventRows.find((e) => e.eventId === params.eventId)
+    if (!hit) return false
+    hit.handleStatus = 1
+    return true
+  }),
+
+  // 3.9 手动触发事件同步（恒返 0 = 互斥跳过语义）
+  route('POST /event/sync', () => 0),
+]
+
+/** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */
+export function matchRoute(
+  method: string,
+  path: string,
+): { handler: (ctx: MockCallContext) => unknown; params: Record<string, string> } | null {
+  const segs = path.split('/').filter(Boolean)
+  for (const r of routes) {
+    if (r.method !== method || r.segments.length !== segs.length) continue
+    const params: Record<string, string> = {}
+    let hit = true
+    for (let i = 0; i < segs.length; i++) {
+      const pat = r.segments[i]!
+      const seg = segs[i]!
+      if (pat.startsWith(':')) {
+        params[pat.slice(1)] = decodeURIComponent(seg)
+      } else if (pat !== seg) {
+        hit = false
+        break
+      }
+    }
+    if (hit) return { handler: r.handler, params }
+  }
+  return null
+}

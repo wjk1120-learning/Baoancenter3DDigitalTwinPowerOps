@@ -1,28 +1,35 @@
-// BAOAN NOTE: contract aligned with Fuyong FY API v3.x; backend hosts TBD at integration stage.
-
 /**
  * HTTP client 分工（必须按表选用，禁止混用 / 禁止再 axios.create）
  *
- * | 导出          | 代理路径     | 后端                  | 带 token | 401 跳认证中心 | 用途                         |
- * |---------------|--------------|-----------------------|----------|----------------|------------------------------|
- * | bzHttp        | /bz-hospital | :8080（139.196.16.252）| 是      | 是             | 设备/能耗/事件/运维全模块    |
- * | authHttp      | /auth        | :8088 认证中心        | 是       | 是             | 4.2 logout、4.3 tickets      |
- * | authAnonHttp  | /auth        | :8088 认证中心        | 否       | 否             | 仅 4.4 exchange（启动时匿名）|
+ * | 导出         | 代理路径     | 用途                          |
+ * |--------------|--------------|-------------------------------|
+ * | bzHttp       | /bz-hospital | 数据后端：设备/能耗/事件/缺陷 |
+ * | authHttp     | /auth        | 认证中心：logout、tickets     |
+ * | authAnonHttp | /auth        | 认证中心：仅 exchange（匿名） |
  *
- * 2026-10-14：数据后端迁移至 139.196.16.252:8080（FY API v3.53），缺陷 4.3/4.4/4.5
- * 已并入同一 FY 后端 → 原 opsHttp（/FY → 8088 运维平台）整链移除。
- * 风险兜底：exchange 走 authAnonHttp，失败只抛错，不会把整页踢去认证中心。
+ * 宝中后端未就绪：VITE_USE_MOCK=true 时三实例统一挂 src/mock/mockAdapter
+ * （axios 官方 adapter 位），请求不出网络、仍走完整拦截器链；联调代理见 vite.config.ts。
  */
+import type { AxiosInstance } from 'axios'
+import { useMock } from '../../mock'
+import { mockAdapter } from '../../mock/mockAdapter'
 import { createHttpClient, httpGet, httpPost } from './createClient'
-import type { RequestConfig } from './types'
+import type { HttpClientOptions, RequestConfig } from './types'
 
-// 不用 /FY 是因为它已被同机部署的运维平台占用（nginx /FY → 8088）；
-// /bz-hospital 由 nginx（或开发代理）重写回 /FY 再转 8080 的 FY 医院后端
+// /bz-hospital 由 vite 代理（生产由 nginx）转发宝中数据后端；/auth 转认证中心
 export const BZ_BASE = '/bz-hospital'
 export const AUTH_BASE = '/auth'
-export const CET_FETCH_TIMEOUT_MS = 25_000
+/** 数据接口统一长超时（事件同步/标记处理等慢接口用） */
+export const DATA_FETCH_TIMEOUT_MS = 25_000
 
-export const bzHttp = createHttpClient({
+/** 统一造 client：mock 开时挂 adapter（全项目唯一挂点，api 层零感知） */
+function createClient(options: HttpClientOptions): AxiosInstance {
+  const instance = createHttpClient(options)
+  if (useMock()) instance.defaults.adapter = mockAdapter
+  return instance
+}
+
+export const bzHttp = createClient({
   baseURL: BZ_BASE,
   withAuth: true,
   redirectOn401: true,
@@ -30,7 +37,7 @@ export const bzHttp = createHttpClient({
   trackOffline: true,
 })
 
-export const authHttp = createHttpClient({
+export const authHttp = createClient({
   baseURL: AUTH_BASE,
   timeout: 15_000,
   withAuth: true,
@@ -39,7 +46,7 @@ export const authHttp = createHttpClient({
   trackOffline: false,
 })
 
-export const authAnonHttp = createHttpClient({
+export const authAnonHttp = createClient({
   baseURL: AUTH_BASE,
   timeout: 15_000,
   withAuth: false,

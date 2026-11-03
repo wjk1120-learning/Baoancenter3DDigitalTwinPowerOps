@@ -20,7 +20,8 @@ import { buildPowerRoomBus, type BusHandle } from './bus'
 import type { CabinetModel, PowerRoomConfig } from '../data/powerRoom'
 
 const CABINET_HEIGHT = 2.2
-const MODEL_URL = (m: CabinetModel) => `/models/cabinets/${m}.glb`
+// BASE_URL 前缀跟随 vite base（/baozhongTwin/），域名根绝对路径在带前缀部署下会 404
+const MODEL_URL = (m: CabinetModel) => `${import.meta.env.BASE_URL}models/cabinets/${m}.glb`
 /** 每帧建柜数（福永 scene.ts BUILD_BATCH 同款，避免单帧卡顿） */
 const BUILD_BATCH = 2
 /** 名牌离柜顶的高度（福永 addNameTag：min(0.55, h*0.25+0.2)，柜高 2.2 时取 0.55） */

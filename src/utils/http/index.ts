@@ -2,7 +2,7 @@ export type { RequestConfig } from './types'
 export { DEFAULT_TIMEOUT_MS } from './createClient'
 export {
   AUTH_BASE,
-  CET_FETCH_TIMEOUT_MS,
+  DATA_FETCH_TIMEOUT_MS,
   BZ_BASE,
   authAnonHttp,
   authAnonPost,
