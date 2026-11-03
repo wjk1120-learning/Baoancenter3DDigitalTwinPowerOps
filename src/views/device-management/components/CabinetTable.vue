@@ -158,12 +158,15 @@ function healthClass(h: number | null): string {
   padding: 14px 18px 10px;
 }
 .dt-head {
+  margin-top: 10px;
   flex: none;
   display: flex;
   align-items: baseline;
   gap: 12px;
   padding-bottom: 10px;
   margin-bottom: 10px;
+  /* 标题区下沿分割线（用户设计定稿） */
+  border-bottom: 1px solid var(--border);
 }
 .dt-title {
   font-size: 20px;
@@ -415,7 +418,7 @@ function healthClass(h: number | null): string {
   align-items: center;
   justify-content: space-between;
   padding-top: 8px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
 }
 .pg-btns {
@@ -424,13 +427,13 @@ function healthClass(h: number | null): string {
   gap: 8px;
 }
 .pg-btns button {
-  min-width: 32px;
-  height: 32px;
+  min-width: 34px;
+  height: 34px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.85);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 18px;
   color: var(--text);
 }
 .pg-btns button:hover:not(:disabled) {

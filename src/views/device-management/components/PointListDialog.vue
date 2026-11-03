@@ -7,7 +7,7 @@ import type { EventLevelStats } from '../../../api/event/types'
 
 /**
  * 点位列表弹窗（4.2④，按需请求）：柜内设备明细（§1.7 分页）+ 柜分级统计头（§3.5）。
- * 行内「查看」→ 交给父级开告警抽屉（抽屉自行按需拉 §1.11/§3.3）。结构照福永 PointListDialog。
+ * 行内「查看详情」→ 交给父级开告警抽屉（抽屉自行按需拉 §1.11/§3.3）。结构照福永 PointListDialog。
  */
 const props = defineProps<{ cabinet: SuperDevice | null }>()
 const emit = defineEmits<{
@@ -115,7 +115,7 @@ function onEsc(e: KeyboardEvent) {
                 </td>
                 <td class="pl-ac mono" :class="{ hot: d.alarmCount > 0 }">{{ d.alarmCount }}</td>
                 <td class="pl-act">
-                  <button class="ev-btn" type="button" @click="emit('viewAlarms', d)">查看</button>
+                  <button class="ev-btn" type="button" @click="emit('viewAlarms', d)">查看详情</button>
                 </td>
               </tr>
               <tr v-if="!devices.length && !loading">
@@ -186,7 +186,7 @@ function onEsc(e: KeyboardEvent) {
   gap: 8px 40px;
 }
 .pl-item {
-  font-size: 15px;
+  font-size: 17px;
   color: var(--primary-700);
   font-weight: 600;
 }
@@ -220,7 +220,10 @@ function onEsc(e: KeyboardEvent) {
 .pl-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 16px;
+}
+.pl-table th {
+  font-size: 16px;
 }
 .pl-table th,
 .pl-table td {
@@ -264,7 +267,7 @@ function onEsc(e: KeyboardEvent) {
   gap: 5px;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 .dot {
@@ -286,7 +289,7 @@ function onEsc(e: KeyboardEvent) {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.9);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--primary);
   cursor: pointer;
@@ -302,7 +305,7 @@ function onEsc(e: KeyboardEvent) {
 .pl-loading {
   text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   padding: 8px;
 }
 .pl-foot {
@@ -311,7 +314,7 @@ function onEsc(e: KeyboardEvent) {
   justify-content: space-between;
   padding: 8px 18px;
   border-top: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
   flex: none;
 }
