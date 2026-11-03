@@ -2,6 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { navConfig } from '../config/navConfig'
+import { AUTH_CENTER_LOGIN_URL } from '../config/authConfig'
+import { logoutOnServer } from '../api/auth/auth'
+import { clearAuthSession, readAuthUser } from '../utils/session'
 import { usePageTabsStore } from '../store/pageTabs'
 import { canAccessOperationsPlatform } from '../utils/operationsAccess'
 import { openOperationsPlatform } from '../utils/jumpToOperations'
@@ -9,17 +12,30 @@ import PageTabs from './PageTabs.vue'
 import logoUrl from '../assets/logo.png'
 
 /**
- * 顶部栏（视觉照搬福永 TopBar）：品牌 + 页内标签条 + 导航下拉 + 时钟 + 全屏。
- * 宝安差异：无 router/pinia/naive-ui/登录——下拉菜单自写。
- * 用户名与退出按钮暂缺，见模板内 TODO(登录移植) 标记。
+ * 顶部栏（视觉照搬福永 TopBar）：品牌 + 页内标签条 + 导航下拉 + 时钟 + 用户名/退出 + 全屏。
+ * 宝安差异：下拉菜单自写（未用 naive Dropdown）；会话来自 utils/session
+ * （mock 模式由 src/mock/authMock 播种，真登录 4.0 下半接入）。
  */
 const router = useRouter()
 const pageTabs = usePageTabsStore()
 const activePath = computed(() => pageTabs.activePath)
 
-// TODO(登录移植): 传入 readAuthUser() 的会话用户；当前无登录态按 null 走（与福永
-// 「用户信息缺失时保持可见」一致，即运维平台入口默认显示，外部人员登录后消失）
-const operationsAllowed = canAccessOperationsPlatform(null)
+const authUser = readAuthUser()
+/** 运维平台入口：内部人员可见；无会话保持可见（与福永「用户信息缺失时保持可见」一致） */
+const operationsAllowed = canAccessOperationsPlatform(authUser)
+const userLabel = computed(() => authUser?.name || authUser?.account || '')
+
+async function logout() {
+  if (!window.confirm('确认退出登录？')) return
+  try {
+    await logoutOnServer()
+  } catch {
+    /* 令牌已失效时仍清本地 */
+  }
+  clearAuthSession()
+  pageTabs.clear()
+  window.location.replace(AUTH_CENTER_LOGIN_URL)
+}
 
 /** 下拉选项：运维平台仅内部人员可见（外部人员 userLevel=2 隐藏） */
 const navOptions = computed(() =>
@@ -150,11 +166,7 @@ onBeforeUnmount(() => {
           <span class="time">{{ timeText }}</span>
         </div>
       </div>
-      <!-- TODO(登录移植): 用户名+退出按钮暂缺，登录上线时补齐（照搬福永 TopBar.vue:157-178）：
-           1. 用户名 <span class="user-label">{{ 会话用户名 }}</span> 插到本注释位置（时钟之后、全屏之前），
-              福永读 readAuthUser()，样式 .user-label 一并搬；
-           2. 退出按钮 class="tb-btn danger"（红色出箭头图标）插到全屏按钮之后，
-              logout = 确认弹窗 → 登出接口 → 清会话 → 跳登录页。 -->
+      <span v-if="userLabel" class="user-label" :title="userLabel">{{ userLabel }}</span>
       <button
         class="tb-btn fullscreen"
         :title="isFullscreen ? '退出全屏' : '进入全屏'"
@@ -167,6 +179,13 @@ onBeforeUnmount(() => {
         </svg>
         <svg v-else viewBox="0 0 24 24" fill="currentColor">
           <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+        </svg>
+      </button>
+      <button class="tb-btn danger" title="退出登录" @click="logout">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"
+          />
         </svg>
       </button>
     </div>
@@ -396,6 +415,24 @@ onBeforeUnmount(() => {
   background: var(--primary-50);
 }
 .tb-btn:active {
+  transform: scale(0.96);
+}
+.user-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-600);
+}
+.tb-btn.danger svg {
+  color: var(--danger);
+}
+.tb-btn.danger:hover {
+  background: #ffdad6;
+}
+.tb-btn.danger:active {
   transform: scale(0.96);
 }
 </style>
