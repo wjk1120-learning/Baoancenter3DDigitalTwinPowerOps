@@ -71,7 +71,6 @@ function groupKey(g: DeviceEventGroup) {
             v-for="g in props.rows"
             :key="groupKey(g)"
             class="ac-row"
-            :class="{ urgent: gradeOf(g) === 1 }"
           >
             <td class="mono">{{ groupLatestTime(g) || '—' }}</td>
             <td class="c-lv">
@@ -212,12 +211,6 @@ function groupKey(g: DeviceEventGroup) {
 }
 .ac-row:hover {
   background: var(--primary-50);
-}
-.ac-row.urgent {
-  background: rgba(239, 68, 68, 0.05);
-}
-.ac-row.urgent:hover {
-  background: rgba(239, 68, 68, 0.1);
 }
 .c-time {
   width: 18%;

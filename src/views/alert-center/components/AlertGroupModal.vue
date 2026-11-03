@@ -221,13 +221,14 @@ function levelTag(g: DeviceEventGroup) {
   transform: translateY(8px) scale(0.99);
   opacity: 0;
 }
+/* 头部白底（用户定稿：浅蓝色带只留给表头，头部与表头分层） */
 .ev-head {
   display: flex;
   align-items: center;
   gap: 12px;
   margin: 0;
-  padding: 12px 18px;
-  background: var(--primary-50);
+  padding: 14px 18px;
+  background: #fff;
   border-bottom: 1px solid var(--border);
   flex: none;
 }
@@ -259,7 +260,7 @@ function levelTag(g: DeviceEventGroup) {
   height: 36px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(93, 113, 137, 0.1);
   font-size: 26px;
   color: var(--muted);
   cursor: pointer;
@@ -267,9 +268,8 @@ function levelTag(g: DeviceEventGroup) {
   flex: none;
 }
 .ev-x:hover {
-  background: #fff;
-  border-color: var(--primary-300);
-  color: var(--primary);
+  background: rgba(93, 113, 137, 0.18);
+  color: var(--title);
 }
 .ev-scroll {
   flex: 0 1 auto;
@@ -288,11 +288,11 @@ function levelTag(g: DeviceEventGroup) {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 16px;
 }
 .ev-table th,
 .ev-table td {
-  padding: 8px 10px;
+  padding: 10px 10px;
   text-align: center;
   border-bottom: 1px solid var(--border);
   color: var(--text);
@@ -306,14 +306,11 @@ function levelTag(g: DeviceEventGroup) {
   z-index: 1;
   font-size: 16px;
   letter-spacing: 0.2px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   line-height: 1.3;
 }
 .ev-table tbody tr:last-child td {
   border-bottom: none;
-}
-.ev-table tbody tr.urgent {
-  background: rgba(239, 68, 68, 0.05);
 }
 .ev-table tbody tr:hover {
   background: var(--primary-50);
@@ -358,6 +355,21 @@ function levelTag(g: DeviceEventGroup) {
 .ev-btn {
   white-space: nowrap;
 }
+/* 基础按钮样式（福永 ev-btn 同款，白底描边；拆组件时曾丢失） */
+.ev-btn {
+  padding: 4px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+}
+.ev-btn:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-300);
+}
 .ev-st-select {
   width: 92px;
 }
@@ -389,19 +401,48 @@ function levelTag(g: DeviceEventGroup) {
   margin: 0;
   padding: 8px 18px;
   border-top: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
   flex: none;
 }
+.pg-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg-btns button {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+}
+.pg-btns button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-50);
+}
+.pg-btns button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pg-info {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 0 6px;
+}
 .mono {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 15px;
 }
 .lv-tag {
   display: inline-block;
   padding: 3px 10px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--tag-color, var(--muted));
   background: color-mix(in srgb, var(--tag-color, #5d7189) 14%, transparent);
@@ -411,7 +452,7 @@ function levelTag(g: DeviceEventGroup) {
   align-items: center;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 .st-pill.st-pending {
