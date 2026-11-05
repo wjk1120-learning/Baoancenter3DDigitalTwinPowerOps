@@ -178,6 +178,7 @@ function healthClass(h: number | null): string {
   color: var(--muted);
 }
 .table-scroll {
+  margin-top: 10px;
   flex: 1;
   overflow: auto;
   min-height: 0;

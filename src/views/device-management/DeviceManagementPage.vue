@@ -81,8 +81,8 @@ function onPage(p: number) {
 // 搜索：类型下拉 + 单输入框（福永 2026-10-30 改稿同款：柜名→§1.10、设备名→§1.9）
 const searchKind = ref<'' | 'cabinet' | 'device'>('')
 const searchKindOptions = [
-  { label: '柜体名称', value: 'cabinet' },
-  { label: '测点设备', value: 'device' },
+  { value: 'cabinet', label: '柜体名称' },
+  { value: 'device', label: '测点设备' },
 ]
 const searchInput = ref('')
 const searchPlaceholder = computed(() =>
@@ -191,10 +191,13 @@ onActivated(() => {
             <span class="search-kind-label">请选择需要查询的类型</span>
             <div class="search-kind">
               <NSelect
-                :value="searchKind"
+                :value="searchKind || null"
                 :options="searchKindOptions"
                 placeholder="选择类型"
-                size="small"
+                size="medium"
+                :show-checkmark="false"
+                :consistent-menu-width="false"
+                :menu-props="{ class: 'search-kind-menu' }"
                 @update:value="(v: '' | 'cabinet' | 'device') => (searchKind = v)"
               />
             </div>
@@ -321,21 +324,24 @@ onActivated(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 18px;
+  padding: 14px 22px;
   border-radius: var(--radius);
   box-shadow: var(--card-shadow);
   flex-wrap: wrap;
+  /* glass-panel 的 backdrop-filter 会建堆叠上下文，后渲染的内容卡片会盖住下拉菜单 → 抬到内容之上 */
+  position: relative;
+  z-index: 20;
 }
 .bread-crumbs {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--muted);
 }
 .crumb.current {
   color: var(--primary-700);
-  font-weight: 600;
+  font-weight: 700;
 }
 .sep {
   color: var(--border-strong);
@@ -354,58 +360,86 @@ onActivated(() => {
 .search-kind-label {
   font-size: 14px;
   color: var(--muted);
+  white-space: nowrap;
 }
+/* 类型下拉定宽容器；触发器 35px 对齐搜索框、选中与菜单项文字居中 */
 .search-kind {
-  width: 120px;
+  width: 128px;
+  flex: none;
 }
 .search-kind :deep(.n-base-selection) {
+  --n-height: 35px;
+  --n-font-size: 14px;
   --n-border-radius: 8px;
+}
+.search-kind :deep(.n-base-selection-label),
+.search-kind :deep(.n-base-selection-placeholder) {
+  justify-content: center;
+}
+.search-kind :deep(.n-base-select-option__content) {
+  text-align: center;
 }
 .search-wrap {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 .search-ico {
   position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 12px;
   pointer-events: none;
 }
 .dm-search {
-  width: 240px;
-  height: 34px;
-  padding: 0 10px 0 32px;
+  padding: 8px 14px 8px 36px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
-  outline: none;
+  width: 180px;
+  transition: all 0.18s;
 }
 .dm-search:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(82, 149, 232, 0.15);
 }
 .dm-search:disabled {
-  background: var(--primary-50);
+  background: rgba(93, 113, 137, 0.1);
+  color: var(--muted);
+  border-color: var(--border);
   cursor: not-allowed;
+  opacity: 0.75;
+}
+.dm-search:disabled::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
 }
 .dm-btn {
-  padding: 7px 18px;
+  padding: 8px 18px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  font-size: 14px;
+  border: none;
+  font-size: 15px;
   font-weight: 600;
-  color: #fff;
   cursor: pointer;
+  transition: all 0.18s;
+}
+.dm-btn.primary {
+  color: var(--on-primary);
+  background: linear-gradient(135deg, var(--primary-400), var(--primary));
+  box-shadow: 0 2px 8px rgba(82, 149, 232, 0.25);
+}
+.dm-btn.primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(82, 149, 232, 0.3);
 }
 .dm-btn.ghost {
-  background: rgba(255, 255, 255, 0.85);
-  color: var(--primary);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border);
+  color: var(--muted);
 }
-.dm-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
+.dm-btn.ghost:not(:disabled):hover {
+  color: var(--primary);
+  border-color: var(--primary-300);
 }
 .dm-btn:disabled {
   opacity: 0.5;
@@ -421,5 +455,12 @@ onActivated(() => {
   margin: 8px 0 0;
   font-size: 13px;
   color: var(--muted);
+}
+</style>
+
+<style>
+/* 类型下拉菜单（teleport 到 body，需全局样式）：选项文字居中 */
+.search-kind-menu .n-base-select-option .n-base-select-option__content {
+  text-align: center;
 }
 </style>
