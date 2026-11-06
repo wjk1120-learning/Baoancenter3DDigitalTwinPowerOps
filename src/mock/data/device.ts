@@ -41,15 +41,24 @@ type CabJson = { code: string; name: string; model: string; devCode?: string }
 
 const rooms = (config as { rooms: { id: string; name: string; rows: CabJson[][] }[] }).rooms
 
+/** 房序号（room-4 → 4）：mock §1.3 的 switchingId，与目录 superName 前缀同源 */
+const switchingIdOf = (roomId: string): number => Number(roomId.replace('room-', ''))
+
 // ---- 箱柜：31 台，superName = 「N#变 + 柜名」（与事件假数据同名关联） ----
-export const cabinets: (SuperDevice & { buildingId: number })[] = []
+export const cabinets: (SuperDevice & {
+  buildingId: number
+  buildingName: string
+  switchingId: number
+})[] = []
 {
   let id = 100
   let idx = 0
   for (const room of rooms) {
+    const switchingId = switchingIdOf(room.id)
     for (const row of room.rows as CabJson[][]) {
       for (const cab of row) {
         idx++
+        const buildingId = ROOM_TO_BUILDING[room.id] ?? 1
         cabinets.push({
           id: id++,
           superName: superNameFor(room.id, cab.name),
@@ -61,7 +70,9 @@ export const cabinets: (SuperDevice & { buildingId: number })[] = []
           // 健康度确定性分布（50~95），覆盖五档展示
           health: Math.min(95, 100 - ((idx * 13) % 50)),
           deviceCount: 3 + (idx % 5),
-          buildingId: ROOM_TO_BUILDING[room.id] ?? 1,
+          buildingId,
+          buildingName: buildings.find((b) => b.id === buildingId)?.buildingName ?? '',
+          switchingId,
         })
       }
     }
@@ -150,6 +161,37 @@ export function searchSupers(query: { superName?: string; page?: string; pageSiz
     .filter((c) => c.superName.includes(q))
     .sort((a, b) => b.status - a.status || a.id - b.id)
   return { total: pool.length, rows: pool.slice((page - 1) * pageSize, page * pageSize) }
+}
+
+/** §1.3 配电房列表（switchingId = 房序号，名称取 power-rooms.json 房名，按 id 升序） */
+export function getSwitchingList() {
+  return rooms
+    .map((r) => ({ id: switchingIdOf(r.id), switchingName: r.name }))
+    .sort((a, b) => a.id - b.id)
+}
+
+/** §1.6 配电房下箱柜（精简；deviceNumber 为摆场绑定键，按 id 升序） */
+export function getSwitchingSupers(switchingId: number) {
+  return cabinets
+    .filter((c) => c.switchingId === switchingId)
+    .sort((a, b) => a.id - b.id)
+    .map((c) => ({ id: c.id, superName: c.superName, deviceNumber: c.deviceNumber }))
+}
+
+/** 单柜详情（新增接口；字段=§1.4 行去掉 status/deviceCount + 楼栋两个字段） */
+export function getSuperById(superId: number) {
+  const cab = cabinets.find((c) => c.id === superId)
+  if (!cab) return null
+  return {
+    id: cab.id,
+    superName: cab.superName,
+    deviceType: cab.deviceType,
+    deviceNumber: cab.deviceNumber,
+    commissionDate: cab.commissionDate,
+    health: cab.health,
+    buildingId: cab.buildingId,
+    buildingName: cab.buildingName,
+  }
 }
 
 /** §1.11 测点：按柜型衍生（mock；真实测点来自 CET） */

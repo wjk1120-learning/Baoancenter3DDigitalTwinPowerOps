@@ -15,7 +15,10 @@ import type {
   DeviceDetail,
   DeviceHealthLevelStats,
   MeasInfo,
-  SuperDevice,
+  SuperDeviceProfile,
+  SuperDeviceRow,
+  SwitchingInfo,
+  SwitchingSuperBrief,
 } from './types'
 
 /** 测点走 Redis 300 秒缓存（§1.11），客户端同周期缓存一次 */
@@ -37,8 +40,8 @@ export async function fetchSuperPage(
   buildingId: number | null,
   page = 1,
   pageSize = 12,
-): Promise<{ total: number; rows: SuperDevice[] }> {
-  const data = await bzGet<{ total: number; rows: SuperDevice[] }>(
+): Promise<{ total: number; rows: SuperDeviceRow[] }> {
+  const data = await bzGet<{ total: number; rows: SuperDeviceRow[] }>(
     '/device/super-devices',
     { ...(buildingId != null ? { buildingId } : {}), page, pageSize },
     conf(),
@@ -101,15 +104,46 @@ export async function fetchSuperSearch(
   superName: string,
   page = 1,
   pageSize = 12,
-): Promise<{ total: number; rows: SuperDevice[] }> {
+): Promise<{ total: number; rows: SuperDeviceRow[] }> {
   const q = String(superName || '').trim()
   if (!q) return { total: 0, rows: [] }
-  const data = await bzGet<{ total: number; rows: SuperDevice[] }>(
+  const data = await bzGet<{ total: number; rows: SuperDeviceRow[] }>(
     '/device/super-devices/search',
     { superName: q, page, pageSize },
     conf(),
   )
   return { total: Number(data?.total) || 0, rows: Array.isArray(data?.rows) ? data.rows : [] }
+}
+
+/** §1.3 配电房列表 GET /device/switchings（配电房页房列表 + switchingId 来源） */
+export async function fetchSwitchingList(): Promise<SwitchingInfo[]> {
+  const data = await bzGet<SwitchingInfo[] | null>('/device/switchings', undefined, conf())
+  return Array.isArray(data)
+    ? data.filter((s) => s && s.id && typeof s.switchingName === 'string')
+    : []
+}
+
+/** §1.6 配电房下箱柜（精简；deviceNumber 为摆场绑定键，后端待补下发） */
+export async function fetchSwitchingSupers(switchingId: number): Promise<SwitchingSuperBrief[]> {
+  if (!switchingId) return []
+  const data = await bzGet<SwitchingSuperBrief[] | null>(
+    `/device/switchings/${switchingId}/super-devices`,
+    undefined,
+    conf(),
+  )
+  return Array.isArray(data) ? data.filter((s) => s && s.id) : []
+}
+
+/** 单柜详情（新增接口 GET /device/super-devices/{superId}，字段见 SuperDeviceProfile）；
+ *  不存在返回 null。设备详情页基本信息/健康度/楼栋的唯一来源。 */
+export async function fetchSuperById(superId: number): Promise<SuperDeviceProfile | null> {
+  if (!superId) return null
+  const data = await bzGet<SuperDeviceProfile | null>(
+    `/device/super-devices/${superId}`,
+    undefined,
+    conf(),
+  )
+  return data && data.id ? data : null
 }
 
 /** §1.11 设备测点明细（点击「点位」时按需请求；服务端 Redis 300s + 客户端同周期缓存） */

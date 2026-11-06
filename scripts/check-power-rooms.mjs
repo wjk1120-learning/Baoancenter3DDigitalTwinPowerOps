@@ -40,6 +40,7 @@ if (!Array.isArray(config.rooms) || config.rooms.length === 0) {
 }
 
 const roomIds = new Set()
+const devSeen = new Map() // devCode → 首次出现位置（设备编号全局唯一校验）
 ;(config.rooms ?? []).forEach((room, ri) => {
   const tag = `rooms[${ri}] ${room?.id ?? ''}`
   rooms += 1
@@ -75,9 +76,14 @@ const roomIds = new Set()
       else if (!MODELS.includes(cab.model))
         fail(tag, at, `model「${cab.model}」不在 4 种柜体枚举内：${MODELS.join(' / ')}`)
 
-      if (cab?.devCode != null && cab.devCode !== '') {
-        if (typeof cab.devCode !== 'string' || !DEV_CODE_RE.test(cab.devCode))
-          fail(tag, at, `devCode「${cab.devCode}」不符合 两位大写字母+6位数字 规则（宝安 BZ000001 / 福永 FY000151）`)
+      if (cab?.devCode == null || cab.devCode === '') {
+        fail(tag, at, 'devCode 必填（设备编号：配电房点柜 §1.6 绑定与设备详情跳转的唯一键）')
+      } else if (typeof cab.devCode !== 'string' || !DEV_CODE_RE.test(cab.devCode)) {
+        fail(tag, at, `devCode「${cab.devCode}」不符合 两位大写字母+6位数字 规则（宝安 BZ000001 / 福永 FY000151）`)
+      } else if (devSeen.has(cab.devCode)) {
+        fail(tag, at, `devCode「${cab.devCode}」全局重复（首次出现在 ${devSeen.get(cab.devCode)}）`)
+      } else {
+        devSeen.set(cab.devCode, `${tag} ${at}`)
       }
 
       if (cab?.nudgeX != null && typeof cab.nudgeX !== 'number')

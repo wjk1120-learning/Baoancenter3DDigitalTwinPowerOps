@@ -14,8 +14,11 @@ import {
   getHealthLevelStats,
   getLevelCountsBySuper,
   getMeasurementsByDeviceId,
+  getSuperById,
   getSuperCount,
   getSuperPage,
+  getSwitchingList,
+  getSwitchingSupers,
   searchDevices,
   searchSupers,
 } from './data/device'
@@ -127,6 +130,15 @@ const routes: MockRoute[] = [
   route('GET /device/search', ({ query }) => searchDevices(query)),
   // §1.10 柜名模糊检索
   route('GET /device/super-devices/search', ({ query }) => searchSupers(query)),
+  // 单柜详情（联调新增接口）。⚠ 必须排在 count/search 字面路由之后：
+  // 3 段参数路由 :superId 会吞掉同段数的字面段（mock 匹配器按登记顺序）
+  route('GET /device/super-devices/:superId', ({ params }) => getSuperById(Number(params.superId))),
+  // §1.3 配电房列表
+  route('GET /device/switchings', () => getSwitchingList()),
+  // §1.6 配电房下箱柜（精简，含摆场绑定键 deviceNumber）
+  route('GET /device/switchings/:switchingId/super-devices', ({ params }) =>
+    getSwitchingSupers(Number(params.switchingId)),
+  ),
   // §1.11 测点明细（按需请求：点位弹窗点击时才发）
   route('GET /device/:deviceId/measurements', ({ params }) =>
     getMeasurementsByDeviceId(Number(params.deviceId)),

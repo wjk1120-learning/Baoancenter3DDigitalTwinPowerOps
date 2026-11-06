@@ -42,6 +42,47 @@ export interface DeviceBrief {
   deviceName: string
 }
 
+/** §1.4/§1.10 行（联调目标形状：buildingId/buildingName 待后端下发，缺省时前端防御式显示「—」） */
+export interface SuperDeviceRow extends SuperDevice {
+  /** 所属楼栋 ID */
+  buildingId: number
+  /** 所属楼栋名（随行下发，设备管理楼栋列/详情所属楼栋直读） */
+  buildingName: string
+}
+
+/** 单柜详情（新增接口 GET /device/super-devices/{superId}；用户定稿：
+ *  字段=§1.4 行去掉 status/deviceCount，含楼栋两个字段） */
+export interface SuperDeviceProfile {
+  id: number
+  superName: string
+  deviceType: string
+  deviceNumber: string
+  /** 投运日期 yyyy-MM-dd（未维护 null） */
+  commissionDate: string | null
+  /** 健康度（0~100，默认 100） */
+  health: number | null
+  /** 所属楼栋 ID */
+  buildingId: number
+  /** 所属楼栋名 */
+  buildingName: string
+}
+
+/** §1.3 配电房（switching） */
+export interface SwitchingInfo {
+  /** 配电房 ID（§1.6 的入参 switchingId） */
+  id: number
+  switchingName: string
+}
+
+/** §1.6 配电房下箱柜（精简：仅 id+名称；deviceNumber 为摆场绑定键，随 §二 2.3 需求后端补下发） */
+export interface SwitchingSuperBrief {
+  /** 箱柜 ID（superId） */
+  id: number
+  superName: string
+  /** 设备编号（BZ...；摆场绑定键，后端待补下发） */
+  deviceNumber: string
+}
+
 /** §1.11 测点（MeasInfo） */
 export interface MeasInfo {
   measID: number
