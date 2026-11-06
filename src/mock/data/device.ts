@@ -1,6 +1,7 @@
 import { eventRows } from './event'
 import type { EventBrief } from '../../api/event/types'
 import type { DeviceDetail, DeviceHealthLevelStats, MeasInfo, SuperDevice } from '../../api/device/types'
+import { superNameFor } from '../../views/power-room/data/powerRoom'
 import config from '../../views/power-room/data/power-rooms.json'
 
 /**
@@ -46,13 +47,12 @@ export const cabinets: (SuperDevice & { buildingId: number })[] = []
   let id = 100
   let idx = 0
   for (const room of rooms) {
-    const short = String(Number(room.id.replace('room-', ''))) + '#变'
     for (const row of room.rows as CabJson[][]) {
       for (const cab of row) {
         idx++
         cabinets.push({
           id: id++,
-          superName: `${short} ${cab.name}`,
+          superName: superNameFor(room.id, cab.name),
           deviceType: MODEL_TO_TYPE[cab.model] ?? '配电柜',
           deviceNumber: cab.devCode ?? `BZ${700000 + idx}`,
           commissionDate: idx % 3 === 0 ? `2021-0${(idx % 9) + 1}-15` : null,

@@ -14,7 +14,7 @@ export interface PageTab {
 const SINGLETON_BASES = new Set([
   '/hospital',
   '/device',
-  '/device-model',
+  '/device-detail',
   '/alert',
   '/defect',
   '/power-room',

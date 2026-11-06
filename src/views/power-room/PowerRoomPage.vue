@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import CategoryPanel from './components/CategoryPanel.vue'
 import { createPowerRoomScene } from './engine/scene'
-import type { PowerRoomsFile } from './data/powerRoom'
+import { superNameFor, type PowerRoomsFile } from './data/powerRoom'
 import config from './data/power-rooms.json'
+import { useDeviceCatalogStore } from '../../store/deviceCatalog'
+import { usePageTabsStore } from '../../store/pageTabs'
+import { globalMessage } from '../../utils/message'
 
 // keep-alive include 按组件名匹配（福永同款）
 defineOptions({ name: 'PowerRoomPage' })
@@ -14,6 +18,10 @@ const { pitch, rooms } = config as PowerRoomsFile
 const containerRef = ref<HTMLElement | null>(null)
 const currentId = ref('room-1')
 let scene: ReturnType<typeof createPowerRoomScene> | null = null
+
+const catalog = useDeviceCatalogStore()
+const pageTabs = usePageTabsStore()
+const router = useRouter()
 
 const options = rooms.map((r) => ({ label: r.name, value: r.id }))
 const totalCount = rooms.reduce((n, r) => n + r.rows.flat().length, 0)
@@ -26,11 +34,29 @@ function mountRoom(id: string) {
   currentId.value = id
 }
 
+/** 点柜跳设备详情：柜名按同源规则拼出台账 superName（mock 与目录共用 superNameFor）→ superId */
+async function onCabinetClick(cab: { code: string; name: string }) {
+  if (!catalog.cabinets.length) await catalog.load().catch(() => {})
+  const superName = superNameFor(currentId.value, cab.name)
+  const hit = catalog.cabinets.find((c) => c.superName === superName)
+  if (!hit) {
+    globalMessage()?.warning(`柜 ${cab.name} 未接入设备台账，暂不能查看详情`)
+    return
+  }
+  pageTabs.open('/device-detail?superId=' + hit.id, '设备详情', 'device-detail')
+  void router.push({
+    path: '/device-detail',
+    query: { superId: String(hit.id), from: 'power' },
+  })
+}
+
 onMounted(() => {
   if (!containerRef.value) return
   // 引擎常驻：渲染器/相机/灯光只建一次，切房走 setRoom（模型模板也跨房缓存）
-  scene = createPowerRoomScene(containerRef.value, pitch)
+  scene = createPowerRoomScene(containerRef.value, pitch, { onCabinetClick })
   mountRoom('room-1')
+  // 台账目录后台预取：首次点柜即可直接命中 superId
+  if (!catalog.cabinets.length) void catalog.load().catch(() => {})
 })
 onUnmounted(() => scene?.dispose())
 </script>

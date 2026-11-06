@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import type { AlertItem } from '../../../api/hospital/types'
-import { chartColors } from '../../../config/chartColors'
-import { eventLevelLabel, handleStatusLabel } from '../../../api/event/mappers'
-import { formatAlertLocations } from '../../../config/alertLocation'
+import type { AlertItem } from '../api/hospital/types'
+import { chartColors } from '../config/chartColors'
+import { eventLevelLabel, handleStatusLabel } from '../api/event/mappers'
+import { formatAlertLocations } from '../config/alertLocation'
 
 const props = defineProps<{
   alert: AlertItem | null

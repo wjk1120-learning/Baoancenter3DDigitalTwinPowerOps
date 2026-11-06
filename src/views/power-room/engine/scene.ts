@@ -164,7 +164,11 @@ export function createPowerRoomScene(
   container: HTMLElement,
   pitch: number,
   /** debug: true 时返回内部状态供 src/tests 下的调试页排查，生产代码不传 */
-  opts: { debug?: boolean } = {},
+  opts: {
+    debug?: boolean
+    /** 点柜跳设备详情（4.3）：命中柜体/名牌时回调（点击判定 = 按下抬起位移 <6px） */
+    onCabinetClick?: (cab: { code: string; name: string }) => void
+  } = {},
 ) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0xeaf3fa)
@@ -350,10 +354,12 @@ export function createPowerRoomScene(
             obj.position.x += slot.x
             obj.position.z += slot.z
             obj.scale.y = 0 // 入场从 0 弹出（beginEntrance 后 backOut 0.45s）
+            obj.userData = { code: cab.code, name: cab.name }
             content.add(obj)
             entrants.push(obj)
             const label = makeNameLabel(cab.name)
             label.position.set(slot.x, CABINET_HEIGHT + LABEL_GAP, slot.z)
+            label.userData = { code: cab.code, name: cab.name }
             content.add(label)
             mounted.n += 1
             n -= 1
@@ -382,6 +388,49 @@ export function createPowerRoomScene(
   }
 
   let raf = 0
+
+  // ---- 点柜拾取：射线命中柜体/名牌 → 回调；悬停变手型（4.3 点柜跳详情） ----
+  const raycaster = new THREE.Raycaster()
+  const pointer = new THREE.Vector2()
+  let downX = 0
+  let downY = 0
+
+  function cabinetAt(e: PointerEvent): { code: string; name: string } | null {
+    const rect = renderer.domElement.getBoundingClientRect()
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+    raycaster.setFromCamera(pointer, camera)
+    const hits = raycaster.intersectObjects(content.children, true)
+    for (const hit of hits) {
+      let o: THREE.Object3D | null = hit.object
+      while (o && o !== content) {
+        const cab = o.userData as { code?: string; name?: string } | undefined
+        if (cab?.code) return { code: cab.code, name: cab.name ?? cab.code }
+        o = o.parent
+      }
+    }
+    return null
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    downX = e.clientX
+    downY = e.clientY
+  }
+  function onPointerUp(e: PointerEvent) {
+    if (!opts.onCabinetClick) return
+    // 拖拽旋转不算点击（位移阈值 6px）
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return
+    const cab = cabinetAt(e)
+    if (cab) opts.onCabinetClick(cab)
+  }
+  function onPointerMove(e: PointerEvent) {
+    if (!opts.onCabinetClick) return
+    renderer.domElement.style.cursor = cabinetAt(e) ? 'pointer' : 'grab'
+  }
+  renderer.domElement.addEventListener('pointerdown', onPointerDown)
+  renderer.domElement.addEventListener('pointerup', onPointerUp)
+  renderer.domElement.addEventListener('pointermove', onPointerMove)
+
   function tick() {
     raf = requestAnimationFrame(tick)
     // 入场弹出：全部柜同一时刻 scale.y 0→1（backOut 0.45s，福永 updateVisual 同款）
@@ -435,6 +484,9 @@ export function createPowerRoomScene(
       buildGen += 1
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      renderer.domElement.removeEventListener('pointerup', onPointerUp)
+      renderer.domElement.removeEventListener('pointermove', onPointerMove)
       clearContent()
       floor.geometry.dispose()
         ; (floor.material as THREE.Material).dispose()

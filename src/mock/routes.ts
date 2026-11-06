@@ -1,5 +1,10 @@
 import type { EventBrief } from '../api/event/types'
 import { eventRows } from './data/event'
+import { getDeviceDailyStats } from './data/energy'
+import {
+  getDefectByDeviceNumber,
+  getInspectionByDeviceNumber,
+} from './data/operation'
 import {
   buildings,
   getDevicesBySuper,
@@ -136,6 +141,20 @@ const routes: MockRoute[] = [
   // §3.5 箱柜分等级统计
   route('GET /event/super-devices/:superId/level-counts', ({ params }) =>
     getLevelCountsBySuper(Number(params.superId)),
+  ),
+
+  // ── 能耗/运维（4.3 设备详情页按需请求）──
+  // §2.4 设备近 30 天每日能耗（固定 30 条按日升序；无读数日为 null）
+  route('GET /energy/devices/:deviceId/daily-stats', ({ params }) =>
+    getDeviceDailyStats(Number(params.deviceId)),
+  ),
+  // §4.1 按箱柜编号查询巡检记录
+  route('GET /operation/inspection-records', ({ query }) =>
+    getInspectionByDeviceNumber(query.deviceNumber ?? ''),
+  ),
+  // §4.2 按箱柜编号查询缺陷记录（仅新表单记录）
+  route('GET /operation/defect-records', ({ query }) =>
+    getDefectByDeviceNumber(query.deviceNumber ?? ''),
   ),
 ]
 

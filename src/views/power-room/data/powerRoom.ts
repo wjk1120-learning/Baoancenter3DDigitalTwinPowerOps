@@ -40,3 +40,13 @@ export interface PowerRoomsFile {
   pitch: number
   rooms: PowerRoomConfig[]
 }
+
+/** 房间 id → 短名（room-1 → 1#变）；mock 设备目录与配电房点柜跳转共用，勿两处各写一份 */
+export function roomShortName(roomId: string): string {
+  return `${Number(roomId.replace('room-', ''))}#变`
+}
+
+/** 房间 + 柜名 → 台账箱柜名（mock device.ts superName 的唯一生成口径） */
+export function superNameFor(roomId: string, cabName: string): string {
+  return `${roomShortName(roomId)} ${cabName}`
+}

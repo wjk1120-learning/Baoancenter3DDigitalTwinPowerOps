@@ -12,7 +12,7 @@ import type { DeviceEventGroup, EventInfo, EventStatsResult } from '../../api/ev
 import { saveAlertSnapshot } from '../../config/alertDetail'
 import { distCount, gradeOf, groupCount } from './composables/groupMeta'
 import AlertStatsCharts from './components/AlertStatsCharts.vue'
-import AlertDetailDrawer from './components/AlertDetailDrawer.vue'
+import AlertDetailDrawer from '../../components/AlertDetailDrawer.vue'
 import AlertKpiBar from './components/AlertKpiBar.vue'
 import AlertGroupsTable from './components/AlertGroupsTable.vue'
 import AlertGroupModal from './components/AlertGroupModal.vue'

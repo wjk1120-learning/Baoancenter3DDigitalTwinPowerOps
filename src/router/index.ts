@@ -15,7 +15,7 @@ const REAL_PAGES: Record<string, () => Promise<Component>> = {
 
 /**
  * 路由表与 navConfig 同源（id=模块名，name=页签标题）；openInNewWindow 项不进路由。
- * 子页面（如 4.3 设备详情 /device-model）落地时在此追加显式路由；
+ * 子页面（如 4.3 设备详情 /device-detail）落地时在此追加显式路由；
  * 登录守卫随 4.0 登录移植补充（福永 router.beforeEach 同款）。
  */
 const router = createRouter({
@@ -30,8 +30,12 @@ const router = createRouter({
         component: REAL_PAGES[item.id] ?? placeholderPage,
         meta: { keepAlive: item.id in REAL_PAGES },
       })),
-    // 设备详情：柜行「详情」跳转目标（福永 /device-model 同款）；页面 4.3 实装后换 DeviceModelPage
-    { path: '/device-model', component: placeholderPage, props: { name: '设备详情' } },
+    // 设备详情：柜行「详情」/配电房点柜跳转目标（用户定名 /device-detail，功能同福永 /device-model）
+    {
+      path: '/device-detail',
+      component: () => import('../views/device-detail/DeviceDetailPage.vue'),
+      meta: { keepAlive: true },
+    },
     // 调试页仅 dev 注册（import.meta.env.DEV 构建期替换，生产不含此 chunk）
     ...(import.meta.env.DEV
       ? [{ path: '/tests/mock', component: () => import('../tests/MockDebugPage.vue') }]

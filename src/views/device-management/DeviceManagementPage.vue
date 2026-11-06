@@ -21,7 +21,7 @@ import PointAlarmDrawer from './components/PointAlarmDrawer.vue'
  * 设备管理（4.2，福永 DeviceManagementPage 同构）：
  * 楼栋树侧栏（§1.5 计数）→ 头部工具条（面包屑 + 类型下拉 + 搜索 + 重置）→
  * 箱柜表（§1.4 浏览 / §1.10 柜名检索 / §1.9 设备名检索）→ 健康度五档卡（§1.12）。
- * 交互链（用户拍板同福永）：柜行「详情」跳设备详情页 /device-model；
+ * 交互链（用户拍板同福永）：柜行「详情」跳设备详情页 /device-detail；
  * 柜行「测点」开弹窗（§1.7 + §3.5）；弹窗行「查看」开告警抽屉（§1.11 + §3.3）——均按需请求。
  * 「添加设备」福永为隐藏按钮+占位抽屉、「导出」待后端联调开放——恢复时照福永移植。
  */
@@ -143,11 +143,11 @@ const alarmDevice = ref<DeviceDetail | null>(null)
 const router = useRouter()
 const pageTabs = usePageTabsStore()
 
-/** 柜行「详情」→ 设备详情页（福永 enterDevice3D 同款）。
+/** 柜行「详情」→ 设备详情页 /device-detail（功能同福永 enterDevice3D）。
  * 福永另带首设备 id（其目录内嵌 devices）；宝中轻目录无此数据，4.3 页面自行经 §1.7 取。 */
 function enterDevice3D(cabinet: SuperDevice) {
-  pageTabs.open('/device-model?superId=' + cabinet.id, '设备详情', 'device')
-  void router.push({ path: '/device-model', query: { superId: String(cabinet.id) } })
+  pageTabs.open('/device-detail?superId=' + cabinet.id, '设备详情', 'device-detail')
+  void router.push({ path: '/device-detail', query: { superId: String(cabinet.id) } })
 }
 
 onActivated(() => {
