@@ -7,6 +7,7 @@ import {
 } from './data/operation'
 import {
   buildings,
+  getBriefDevicesBySuper,
   getDevicesBySuper,
   getEventCountByDevice,
   getEventsByDevice,
@@ -117,6 +118,10 @@ const routes: MockRoute[] = [
   // §1.7 箱柜下设备明细分页
   route('GET /device/super-devices/:superId/devices', ({ params, query }) =>
     getDevicesBySuper(query, Number(params.superId)),
+  ),
+  // §1.8 箱柜下设备列表（精简：仅 id+名称；4.3 设备详情趋势下拉用）
+  route('GET /device/super-devices/:superId/devices/brief', ({ params }) =>
+    getBriefDevicesBySuper(Number(params.superId)),
   ),
   // §1.9 设备名模糊检索
   route('GET /device/search', ({ query }) => searchDevices(query)),

@@ -36,6 +36,12 @@ export interface DeviceDetail {
   enabled: number
 }
 
+/** §1.8 箱柜下设备列表（精简，适配下拉/选择器场景；按 deviceId 升序，无分页） */
+export interface DeviceBrief {
+  deviceId: number
+  deviceName: string
+}
+
 /** §1.11 测点（MeasInfo） */
 export interface MeasInfo {
   measID: number

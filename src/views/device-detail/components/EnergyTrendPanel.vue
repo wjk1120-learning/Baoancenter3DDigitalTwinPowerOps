@@ -5,24 +5,20 @@ import type { EChartsOption } from 'echarts'
 import BaseChart from '../../../panels/BaseChart.vue'
 import { fetchDeviceDailyEnergy } from '../../../api/energy/energy'
 import type { DeviceDailyEnergy } from '../../../api/energy/types'
-import type { DeviceDetail } from '../../../api/device/types'
+import type { DeviceBrief } from '../../../api/device/types'
 import { chartColors, withAlpha } from '../../../config/chartColors'
 
 /**
  * 电能趋势面板（设备详情底部中区，§2.4）。
- * 下拉：该箱柜下的开关（页面按 §1.7 拉好的列表经 props 传入）；
+ * 下拉：该箱柜下的开关（页面按 §1.8 精简列表拉好后经 props 传入）；
  * 折线图 = 所选开关近 30 天逐日电量（固定近 30 个完整日、截至昨日；
  * 无读数日为 null → 折线断点，不折算成 0）。全部日无读数时画 0 值水平线占位。
+ * 选中只驱动 §2.4 一个请求（2026-11-06 用户拍板：与告警卡下拉解耦，各自独立）。
  */
 const props = defineProps<{
   superId: number | null
-  /** 箱柜下开关列表（页面按 §1.7 拉取后传入，避免同柜重复请求） */
-  devices: DeviceDetail[]
-}>()
-
-/** 当前选中的开关对外同步：告警记录卡的只读设备框 + §3.3 查询都跟它走 */
-const emit = defineEmits<{
-  'device-change': [payload: { id: number | null; name: string; ready: boolean }]
+  /** 箱柜下开关列表（页面按 §1.8 精简接口拉取后传入，避免同柜重复请求） */
+  devices: DeviceBrief[]
 }>()
 
 const deviceId = ref<number | null>(null)
@@ -32,6 +28,9 @@ const loading = ref(false)
 const deviceOptions = computed(() =>
   props.devices.map((d) => ({ label: d.deviceName, value: d.deviceId })),
 )
+
+/** 下拉菜单固定 180px、超出滚动（naive 官方通道 InternalSelectMenu.height——虚拟列表/滚动条随该值正确计算；CSS 压外层盒子虚拟列表不认账） */
+const menuTheme = { peers: { InternalSelectMenu: { height: '180px' } } }
 
 async function loadEnergy() {
   if (deviceId.value == null) {
@@ -59,19 +58,6 @@ watch(
   { immediate: true },
 )
 watch(deviceId, () => void loadEnergy())
-// 选中开关对外同步（名称用于告警记录卡的只读设备框）
-watch(
-  [deviceId, () => props.devices],
-  () => {
-    const hit = props.devices.find((d) => d.deviceId === deviceId.value)
-    emit('device-change', {
-      id: deviceId.value,
-      name: hit?.deviceName || '',
-      ready: true,
-    })
-  },
-  { immediate: true },
-)
 
 /** 有任一天有读数即视为有数据 */
 const hasData = computed(() => days.value.some((d) => d.energyKwh != null))
@@ -145,6 +131,7 @@ const option = computed<EChartsOption>(() => ({
           class="device-select"
           :show-checkmark="false"
           placeholder="选择开关"
+          :theme-overrides="menuTheme"
           @update:value="(v: number | null) => (deviceId = v)"
         />
       </div>

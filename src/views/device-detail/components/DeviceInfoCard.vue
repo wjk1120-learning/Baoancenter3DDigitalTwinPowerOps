@@ -3,8 +3,6 @@ defineProps<{
   name: string
   deviceNumber: string
   deviceType: string
-  /** §1.7 首个设备 enabled 的展示口径：启用/停用/—（箱柜级无状态字段） */
-  status: string
   commissionDate: string
 }>()
 </script>
@@ -22,19 +20,6 @@ defineProps<{
       <div class="info-field">
         <span class="k">设备类型</span>
         <span class="v"><span class="dtag">{{ deviceType || '—' }}</span></span>
-      </div>
-      <div class="info-field">
-        <span class="k">设备状态</span>
-        <span class="v">
-          <span
-            v-if="status"
-            class="status-pill"
-            :class="status === '启用' ? 'st-ok' : 'st-danger'"
-          >
-            <span class="status-dot" />{{ status }}
-          </span>
-          <span v-else class="v mono">—</span>
-        </span>
       </div>
       <div class="info-field">
         <span class="k">投运日期</span><span class="v mono">{{ commissionDate || '—' }}</span>
@@ -122,28 +107,5 @@ defineProps<{
   font-weight: 600;
   color: var(--primary-700);
   background: var(--primary-50);
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.st-ok {
-  color: var(--ok-text);
-  background: rgba(46, 196, 142, 0.12);
-}
-.st-danger {
-  color: var(--danger-text);
-  background: rgba(239, 68, 68, 0.12);
 }
 </style>

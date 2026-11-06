@@ -13,10 +13,10 @@ import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import { createDeviceScene, modelOfType, type DeviceScene } from './engine/deviceScene'
 import type { AlertItem, HistoryAlertRow } from '../../api/hospital/types'
-import type { DeviceDetail, SuperDevice } from '../../api/device/types'
+import type { DeviceBrief, SuperDevice } from '../../api/device/types'
 import type { EventBrief } from '../../api/event/types'
 import type { CaoliaoRecord, InspectDeviceRecord } from '../../api/operation/types'
-import { fetchDevicesBySuper } from '../../api/device/device'
+import { fetchDeviceBriefsBySuper } from '../../api/device/device'
 import { fetchDeviceHistoryEvents } from '../../api/event/event'
 import { normalizeEventLevel } from '../../api/event/mappers'
 import {
@@ -65,8 +65,8 @@ const currentBuilding = computed(
   () => catalog.buildings.find((b) => b.id === currentCabinet.value?.buildingId)?.buildingName || '—',
 )
 
-/** §1.7 箱柜下设备明细（页面拉一次，电能趋势/信息卡状态共用） */
-const cabDevices = ref<DeviceDetail[]>([])
+/** §1.8 箱柜下设备列表（精简，页面拉一次供电能趋势下拉用；2026-11-06 用户拍板弃 §1.7） */
+const cabDevices = ref<DeviceBrief[]>([])
 
 const pageReady = ref(false)
 const catalogError = ref('')
@@ -77,13 +77,9 @@ async function ensureCatalog() {
   catalogError.value = catalog.error
 }
 
-// ---- 电能趋势选中开关 → 告警记录跟随（福永同款联动：告警卡不自筛） ----
-const trendDeviceId = ref<number | null>(null)
-const trendDeviceName = ref('')
-function onTrendDeviceChange(payload: { id: number | null; name: string; ready: boolean }) {
-  trendDeviceId.value = payload.id
-  trendDeviceName.value = payload.name
-}
+// ---- 告警记录：卡内自带开关下拉，与电能趋势解耦（2026-11-06 用户拍板）——
+// 选中只驱动 §3.3 一个请求；电能趋势选中只驱动 §2.4 ----
+const alertDeviceId = ref<number | null>(null)
 
 const historyAlerts = ref<HistoryAlertRow[]>([])
 const historyLoading = ref(false)
@@ -101,7 +97,7 @@ function briefToHistoryRow(e: EventBrief): HistoryAlertRow {
 }
 
 async function loadHistory() {
-  const id = trendDeviceId.value
+  const id = alertDeviceId.value
   if (id == null) {
     historyAlerts.value = []
     return
@@ -115,8 +111,8 @@ async function loadHistory() {
   }
 }
 
-// 电能趋势切换开关 → §3.3 告警记录跟着切（null = 无开关，直接清空）
-watch(trendDeviceId, () => void loadHistory())
+// 告警卡切换开关 → §3.3（null = 无开关，直接清空）
+watch(alertDeviceId, () => void loadHistory())
 
 // ---- 维护记录（§4.1）/ 缺陷记录（§4.2）+ 缺陷详情抽屉 ----
 const maintenanceRecords = ref<InspectDeviceRecord[]>([])
@@ -259,15 +255,15 @@ async function bootScene() {
   maintenanceRecords.value = []
   defectRecords.value = []
   cabDevices.value = []
+  alertDeviceId.value = null // 换柜先清空，避免旧柜开关 id 在新列表里碰巧存在串台
   void loadMaintenance()
   void loadDefects()
   const sid = superIdQuery.value
   cabDevices.value = sid
-    ? await fetchDevicesBySuper(sid, 1, 200)
-        .then((r) => r.rows)
-        .catch(() => [])
+    ? await fetchDeviceBriefsBySuper(sid).catch(() => [])
     : []
-  // 电能趋势面板选中首个开关后经 device-change 回流，watch 触发 loadHistory
+  // 告警卡默认选中首个开关 → watch 触发 §3.3；电能趋势面板自行选首个只发 §2.4
+  alertDeviceId.value = cabDevices.value[0]?.deviceId ?? null
   nextTick(() => void initScene())
 }
 
@@ -307,8 +303,10 @@ function back() {
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return
   // 缺陷详情抽屉打开时 ESC 只关抽屉（naive 自带），不触发返回（福永同款守卫）；
-  // 告警抽屉是自绘的，ESC 在这里代为关闭
+  // 告警抽屉是自绘的，ESC 在这里代为关闭；
+  // NSelect 下拉菜单开着时同理只关菜单，关完再按一次 Esc 才返回
   if (defectDrawerShow.value) return
+  if (document.querySelector('.n-base-select-menu')) return
   if (detailAlert.value) {
     detailAlert.value = null
     return
@@ -359,14 +357,14 @@ function onKeydown(e: KeyboardEvent) {
             :name="displayName"
             :device-number="currentCabinet.deviceNumber"
             :device-type="currentCabinet.deviceType"
-            :status="cabDevices[0]?.enabled === 1 ? '启用' : cabDevices[0]?.enabled === 0 ? '停用' : ''"
             :commission-date="currentCabinet.commissionDate || ''"
           />
           <DefectCard :records="defectRecords" :loading="defectLoading" @open="openDefect" />
           <HistoryAlertCard
+            v-model:selected="alertDeviceId"
             :alerts="historyAlerts"
             :loading="historyLoading"
-            :device-name="trendDeviceName"
+            :devices="cabDevices"
             @open="openHistAlert"
           />
         </aside>
@@ -380,11 +378,7 @@ function onKeydown(e: KeyboardEvent) {
           />
         </aside>
 
-        <EnergyTrendPanel
-          :super-id="currentCabinet.id"
-          :devices="cabDevices"
-          @device-change="onTrendDeviceChange"
-        />
+        <EnergyTrendPanel :super-id="currentCabinet.id" :devices="cabDevices" />
 
         <DefectDetailDrawer v-model:show="defectDrawerShow" :record="activeDefect" />
         <AlertDetailDrawer :alert="detailAlert" @close="detailAlert = null" />

@@ -124,6 +124,14 @@ export function getDevicesBySuper(query: { page?: string; pageSize?: string }, s
   return { total: pool.length, rows: pool.slice((page - 1) * pageSize, page * pageSize) }
 }
 
+/** §1.8 箱柜下设备列表（精简：仅 id+名称，按 id 升序，无分页） */
+export function getBriefDevicesBySuper(superId: number) {
+  return devices
+    .filter((d) => superIdOfDevice(d) === superId)
+    .sort((a, b) => a.deviceId - b.deviceId)
+    .map((d) => ({ deviceId: d.deviceId, deviceName: d.deviceName }))
+}
+
 /** §1.9 设备名模糊检索（LIKE %q%） */
 export function searchDevices(query: { deviceName?: string; page?: string; pageSize?: string }) {
   const q = (query.deviceName ?? '').trim()

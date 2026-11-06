@@ -1,20 +1,33 @@
 <script setup lang="ts">
+import { NSelect } from 'naive-ui'
 import { eventLevelLabel, normalizeEventLevel } from '../../../api/event/mappers'
 import type { HistoryAlertRow } from '../../../api/hospital/types'
+import type { DeviceBrief } from '../../../api/device/types'
 
 /**
  * 告警记录卡（历史告警，§3.3 按设备查询）。
- * 顶部只读设备框与「电能趋势」的开关下拉同步（告警跟随所选开关查询，不自筛）。
- * 等级配色按宝中口径：紧急红 / 严重琥珀 / 一般主题蓝 / 提醒灰。
+ * 顶部自带开关下拉（与「电能趋势」下拉互相独立——2026-11-06 用户拍板解耦：
+ * 各自选中各自请求，切一个只发一个接口）。等级配色按宝中口径：紧急红/严重琥珀/一般蓝/提醒灰。
  */
-defineProps<{
+const props = defineProps<{
   alerts: HistoryAlertRow[]
   loading: boolean
-  /** 电能趋势当前选中的开关名（只读展示） */
-  deviceName?: string
+  /** 开关列表（§1.8 精简，页面拉好后传入） */
+  devices: DeviceBrief[]
+  /** 当前选中的开关 id（v-model:selected） */
+  selected: number | null
 }>()
 
-const emit = defineEmits<{ open: [row: HistoryAlertRow] }>()
+const emit = defineEmits<{
+  open: [row: HistoryAlertRow]
+  'update:selected': [id: number | null]
+}>()
+
+const deviceOptions = () =>
+  props.devices.map((d) => ({ label: d.deviceName, value: d.deviceId }))
+
+/** 下拉菜单固定 180px、超出滚动（naive 官方通道 InternalSelectMenu.height；与电能趋势下拉同款） */
+const menuTheme = { peers: { InternalSelectMenu: { height: '180px' } } }
 
 function gradeOf(a: HistoryAlertRow) {
   if (a.eventLevel) return normalizeEventLevel(a.eventLevel)
@@ -32,8 +45,17 @@ function formatHistTime(t: string) {
   <div class="info-card glass-panel hist-card">
     <div class="hist-head">
       <div class="card-title">告警记录</div>
-      <!-- 设备框：只做展示，与「电能趋势」的开关下拉同步；此处不可筛选 -->
-      <div class="hist-device" :title="deviceName || '—'">{{ deviceName || '—' }}</div>
+      <!-- 开关下拉：独立选择，选中只驱动 §3.3 告警查询 -->
+      <NSelect
+        class="hist-select"
+        :value="selected"
+        :options="deviceOptions()"
+        size="small"
+        :show-checkmark="false"
+        placeholder="选择开关"
+        :theme-overrides="menuTheme"
+        @update:value="(v: number | null) => emit('update:selected', v)"
+      />
     </div>
     <div class="hist-scroll">
       <button
@@ -116,24 +138,10 @@ function formatHistTime(t: string) {
   margin-bottom: 10px;
   flex: none;
 }
-.hist-device {
-  flex: 0 1 140px;
-  min-width: 0;
-  height: 28px;
-  box-sizing: border-box;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  border: 1px solid #b9cee9;
-  border-radius: 8px;
-  background: #fff;
-  font-size: 14px;
-  color: #33485f;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: default;
-  user-select: text;
+/* 开关下拉：宽度对齐「电能趋势」的开关下拉（180px） */
+.hist-select {
+  width: 180px;
+  flex: none;
 }
 /* 空态：图标 + 主文案，居中撑满卡片 */
 .hist-empty {

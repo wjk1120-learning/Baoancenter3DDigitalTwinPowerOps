@@ -38,11 +38,11 @@ function metaFields(rec: InspectDeviceRecord): MetaField[] {
   const fields: MetaField[] = []
   if (rec.recordId) fields.push({ label: '记录编号', value: rec.recordId })
   if (props.cabinetName || rec.superDeviceName) {
-    fields.push({ label: '扫码位置', value: props.cabinetName || rec.superDeviceName })
+    fields.push({ label: '箱柜名称', value: props.cabinetName || rec.superDeviceName })
   }
   if (rec.inspector) fields.push({ label: '巡检人', value: rec.inspector })
   if (rec.temperature != null) {
-    fields.push({ label: '设备温度', value: `${rec.temperature}℃`, accent: true })
+    fields.push({ label: '设备运行温度', value: `${rec.temperature}℃`, accent: true })
   }
   // 最热点电流不展示（2026-11-06 用户定稿：元数据行只留 记录编号/扫码位置/巡检人/设备温度）
   return fields
@@ -106,7 +106,24 @@ function thumbs(rec: InspectDeviceRecord): { url: string; tag: string }[] {
       </div>
     </div>
     <div v-else-if="loading" class="maint-empty">加载中…</div>
-    <div v-else class="maint-empty">暂无维护记录</div>
+    <div v-else class="maint-empty">
+      <!-- 空态对齐缺陷卡/告警卡：图标 + 主文案居中竖排 -->
+      <svg
+        class="me-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        <rect x="8" y="2" width="8" height="4" rx="1" />
+        <path d="M9 14l2 2 4-4" />
+      </svg>
+      <span>暂无维护记录</span>
+    </div>
   </div>
 </template>
 
@@ -281,10 +298,21 @@ function thumbs(rec: InspectDeviceRecord): { url: string; tag: string }[] {
   display: block;
 }
 
+/* 空态：图标 + 主文案，居中撑满卡片（缺陷卡/告警卡同款规格） */
 .maint-empty {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 15px;
   color: var(--muted);
-  text-align: center;
-  padding: 24px;
+}
+.me-icon {
+  width: 38px;
+  height: 38px;
+  color: #b9cee9;
 }
 </style>

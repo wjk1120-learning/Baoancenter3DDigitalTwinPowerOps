@@ -9,7 +9,14 @@
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import { KeyedMemoryCache } from '../../utils/cache'
 import type { RequestConfig } from '../../utils/http'
-import type { BuildingInfo, DeviceDetail, DeviceHealthLevelStats, MeasInfo, SuperDevice } from './types'
+import type {
+  BuildingInfo,
+  DeviceBrief,
+  DeviceDetail,
+  DeviceHealthLevelStats,
+  MeasInfo,
+  SuperDevice,
+} from './types'
 
 /** 测点走 Redis 300 秒缓存（§1.11），客户端同周期缓存一次 */
 const MEAS_CLIENT_TTL_MS = 300_000
@@ -61,6 +68,16 @@ export async function fetchDevicesBySuper(
     conf(),
   )
   return { total: Number(data?.total) || 0, rows: Array.isArray(data?.rows) ? data.rows : [] }
+}
+
+/** §1.8 箱柜下设备列表（精简：仅 deviceId/deviceName，按 id 升序，无分页；下拉/选择器场景） */
+export async function fetchDeviceBriefsBySuper(superId: number): Promise<DeviceBrief[]> {
+  const data = await bzGet<DeviceBrief[] | null>(
+    `/device/super-devices/${superId}/devices/brief`,
+    undefined,
+    conf(),
+  )
+  return Array.isArray(data) ? data.filter((d) => d && d.deviceId) : []
 }
 
 /** §1.9 按设备名称模糊检索（分页） */
