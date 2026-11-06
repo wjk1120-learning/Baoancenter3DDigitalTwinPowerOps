@@ -357,6 +357,7 @@ function onKeydown(e: KeyboardEvent) {
             :name="displayName"
             :device-number="currentCabinet.deviceNumber"
             :device-type="currentCabinet.deviceType"
+            :building-name="currentBuilding"
             :commission-date="currentCabinet.commissionDate || ''"
           />
           <DefectCard :records="defectRecords" :loading="defectLoading" @open="openDefect" />

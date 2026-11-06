@@ -3,6 +3,8 @@ defineProps<{
   name: string
   deviceNumber: string
   deviceType: string
+  /** 所属楼栋（mock 目录柜带 buildingId 对楼栋名；§1.4 契约无此字段，联调切真后端不回则显示「—」） */
+  buildingName: string
   commissionDate: string
 }>()
 </script>
@@ -20,6 +22,9 @@ defineProps<{
       <div class="info-field">
         <span class="k">设备类型</span>
         <span class="v"><span class="dtag">{{ deviceType || '—' }}</span></span>
+      </div>
+      <div class="info-field">
+        <span class="k">所属楼栋</span><span class="v">{{ buildingName || '—' }}</span>
       </div>
       <div class="info-field">
         <span class="k">投运日期</span><span class="v mono">{{ commissionDate || '—' }}</span>
