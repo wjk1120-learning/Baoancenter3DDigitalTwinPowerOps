@@ -99,9 +99,11 @@ export async function fetchDeviceSearch(
   return { total: Number(data?.total) || 0, rows: Array.isArray(data?.rows) ? data.rows : [] }
 }
 
-/** §1.10 按柜体名称模糊检索（分页，结构同 §1.4） */
+/** §1.10 按柜体名称模糊检索（分页，结构同 §1.4；buildingId 可选——后端按楼栋过滤，
+ *  侧栏选中楼栋时携带，医院级不传。后端需求：用户已与后端确认新增该可选参数） */
 export async function fetchSuperSearch(
   superName: string,
+  buildingId: number | null = null,
   page = 1,
   pageSize = 12,
 ): Promise<{ total: number; rows: SuperDeviceRow[] }> {
@@ -109,7 +111,7 @@ export async function fetchSuperSearch(
   if (!q) return { total: 0, rows: [] }
   const data = await bzGet<{ total: number; rows: SuperDeviceRow[] }>(
     '/device/super-devices/search',
-    { superName: q, page, pageSize },
+    { superName: q, ...(buildingId != null ? { buildingId } : {}), page, pageSize },
     conf(),
   )
   return { total: Number(data?.total) || 0, rows: Array.isArray(data?.rows) ? data.rows : [] }

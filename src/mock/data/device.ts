@@ -152,13 +152,20 @@ export function searchDevices(query: { deviceName?: string; page?: string; pageS
   return { total: pool.length, rows: pool.slice((page - 1) * pageSize, page * pageSize) }
 }
 
-/** §1.10 柜名模糊检索（结构同 §1.4，排序同） */
-export function searchSupers(query: { superName?: string; page?: string; pageSize?: string }) {
+/** §1.10 柜名模糊检索（结构同 §1.4，排序同；buildingId 可选=按楼栋过滤，后端需求 §二新增参数） */
+export function searchSupers(query: {
+  superName?: string
+  buildingId?: string
+  page?: string
+  pageSize?: string
+}) {
   const q = (query.superName ?? '').trim()
   const page = Math.max(1, Number(query.page) || 1)
   const pageSize = Math.max(1, Number(query.pageSize) || 12)
+  const buildingId =
+    query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
   const pool = cabinets
-    .filter((c) => c.superName.includes(q))
+    .filter((c) => c.superName.includes(q) && (buildingId == null || c.buildingId === buildingId))
     .sort((a, b) => b.status - a.status || a.id - b.id)
   return { total: pool.length, rows: pool.slice((page - 1) * pageSize, page * pageSize) }
 }

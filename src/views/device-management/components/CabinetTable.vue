@@ -16,6 +16,8 @@ const props = defineProps<{
   total: number
   page: number
   totalPages: number
+  /** 空态提示文案（选中楼栋检索 0 匹配时引导切回全院；空串=默认「无匹配数据」） */
+  emptyHint?: string
 }>()
 
 const emit = defineEmits<{
@@ -133,7 +135,7 @@ function healthClass(h: number | null): string {
       </table>
 
       <div v-if="!props.rows.length" class="dempty">
-        {{ props.loading ? '加载中…' : '无匹配数据' }}
+        {{ props.loading ? '加载中…' : props.emptyHint || '无匹配数据' }}
       </div>
     </div>
     <footer class="dt-foot">

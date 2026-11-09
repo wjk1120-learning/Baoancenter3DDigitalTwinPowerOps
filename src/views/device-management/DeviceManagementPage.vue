@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, onActivated, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NSelect } from 'naive-ui'
 import { usePageTabsStore } from '../../store/pageTabs'
-import { useDeviceCatalogStore } from '../../store/deviceCatalog'
-import { fetchDeviceSearch } from '../../api/device/device'
-import type { DeviceDetail, SuperDevice } from '../../api/device/types'
+import {
+  fetchDeviceSearch,
+  fetchHealthLevelStats,
+  fetchSuperPage,
+  fetchSuperSearch,
+} from '../../api/device/device'
+import type {
+  DeviceDetail,
+  DeviceHealthLevelStats,
+  SuperDevice,
+  SuperDeviceRow,
+} from '../../api/device/types'
 import {
   gradeCountsFromLevelStats,
   healthGrade,
@@ -18,27 +27,42 @@ import PointListDialog from './components/PointListDialog.vue'
 import PointAlarmDrawer from './components/PointAlarmDrawer.vue'
 
 /**
- * 设备管理（4.2，福永 DeviceManagementPage 同构）：
- * 楼栋树侧栏（§1.5 计数）→ 头部工具条（面包屑 + 类型下拉 + 搜索 + 重置）→
+ * 设备管理（4.2，福永 DeviceManagementPage 同构；目录解耦批次 2 起不再走全局 store）：
+ * 楼栋树侧栏（角标=医院级全量行本地分组，0 柜楼栋隐藏）→ 头部工具条（面包屑+类型下拉+搜索+重置）→
  * 箱柜表（§1.4 浏览 / §1.10 柜名检索 / §1.9 设备名检索）→ 健康度五档卡（§1.12）。
- * 交互链（用户拍板同福永）：柜行「详情」跳设备详情页 /device-detail；
- * 柜行「测点」开弹窗（§1.7 + §3.5）；弹窗行「查看」开告警抽屉（§1.11 + §3.3）——均按需请求。
- * 「添加设备」福永为隐藏按钮+占位抽屉、「导出」待后端联调开放——恢复时照福永移植。
+ * 请求口径（用户定稿）：进入 2 个（§1.4 全量 + §1.12）；切楼栋 2 个（§1.4/§1.12 带 buildingId）；
+ * 楼栋树/角标/总数从医院级全量行本地派生（§1.2/§1.5 不再调用）；切回页签 0 请求。
+ * 交互链：柜行「详情」跳 /device-detail；柜行「测点」开弹窗（§1.7+§3.5）；弹窗行「查看」开告警
+ * 抽屉（§1.11+§3.3）——均按需请求。
  */
 defineOptions({ name: 'DeviceManagementPage' })
 
 const HOSPITAL_NAME = '深圳市宝安中心医院'
-const catalog = useDeviceCatalogStore()
 
-// 本地分页（目录全量在 store，12 条/页，序号跨页累加；用户拍板 12 条对齐福永观感）
+// ---- 页面本地目录状态 ----
+/** 浏览态行（当前选中范围：医院或某栋；§1.4 行自带 buildingId/buildingName） */
+const cabinets = ref<SuperDeviceRow[]>([])
+/** 当前选中范围的 §1.4 行（不被检索结果覆盖——设备名检索按它做楼栋范围过滤） */
+const browseRows = ref<SuperDeviceRow[]>([])
+/** 健康度五档（随选中范围，§1.12） */
+const health = ref<DeviceHealthLevelStats | null>(null)
+/** 侧栏选中：null=医院 */
+const selectedBuilding = ref<number | null>(null)
+const loading = ref(false)
+
+/** 医院级派生（仅首次进入加载，楼栋切换不刷新 → 角标/总数恒显示） */
+const buildingTree = ref<{ chnID: number; chnName: string; deviceCount: number }[]>([])
+const sidebarTotal = ref(0)
+
+// 本地分页（12 条/页，序号跨页累加；用户拍板 12 条对齐福永观感）
 const page = ref(1)
 const PAGE_SIZE = 12
 
-// 健康度筛选（本地，作用于全量目录）
+// 健康度筛选（本地，作用于当前范围行）
 const selectedGrade = ref<HealthGrade>('all')
 const gradeCounts = computed(() =>
-  catalog.health
-    ? gradeCountsFromLevelStats(catalog.health)
+  health.value
+    ? gradeCountsFromLevelStats(health.value)
     : { all: 0, excellent: 0, good: 0, fair: 0, poor: 0, terrible: 0 },
 )
 const gradeLabel = computed(() => GRADE_LABELS[selectedGrade.value] ?? '全部设备')
@@ -51,19 +75,13 @@ const GRADE_LABELS: Record<HealthGrade, string> = {
   terrible: '极差',
 }
 
-/** 楼栋列显示名（buildingId → 楼栋名） */
-function buildingNameOf(buildingId?: number): string {
-  if (buildingId == null) return '—'
-  return catalog.buildings.find((b) => b.id === buildingId)?.buildingName ?? '—'
-}
-
 const filtered = computed(() =>
   selectedGrade.value === 'all'
-    ? catalog.cabinets
-    : catalog.cabinets.filter((c) => healthGrade(c.health) === selectedGrade.value),
+    ? cabinets.value
+    : cabinets.value.filter((c) => healthGrade(c.health) === selectedGrade.value),
 )
 const cabinetRows = computed(() =>
-  filtered.value.map((c) => ({ ...c, buildingName: buildingNameOf(c.buildingId) })),
+  filtered.value.map((c) => ({ ...c, buildingName: c.buildingName || '—' })),
 )
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)))
 const paged = computed(() =>
@@ -102,9 +120,75 @@ const tableTotal = computed(() =>
   tableMode.value === 'device' ? deviceRows.value.length : filtered.value.length,
 )
 const channelLabel = computed(() => {
-  if (catalog.buildingId == null) return '全部楼栋'
-  return catalog.buildings.find((b) => b.id === catalog.buildingId)?.buildingName ?? '全部楼栋'
+  if (selectedBuilding.value == null) return '全部楼栋'
+  return buildingTree.value.find((t) => t.chnID === selectedBuilding.value)?.chnName ?? '全部楼栋'
 })
+
+/** §1.4 分页拉全量（buildingId null=医院级；行自带 buildingId/buildingName） */
+async function fetchAllRows(buildingId: number | null): Promise<SuperDeviceRow[]> {
+  const first = await fetchSuperPage(buildingId, 1, 200)
+  const rows = [...first.rows]
+  while (rows.length < first.total && rows.length < 2000) {
+    const next = await fetchSuperPage(buildingId, Math.floor(rows.length / 200) + 1, 200)
+    if (!next.rows.length) break
+    rows.push(...next.rows)
+  }
+  return rows
+}
+
+/** 首次进入（医院级，2 个请求）：§1.4 全量（行派生楼栋树/角标/总数）+ §1.12 五档 */
+async function loadHospital() {
+  loading.value = true
+  try {
+    const rows = await fetchAllRows(null)
+    cabinets.value = rows
+    browseRows.value = rows
+    sidebarTotal.value = rows.length
+    const map = new Map<number, { chnID: number; chnName: string; deviceCount: number }>()
+    for (const r of rows) {
+      const hit = map.get(r.buildingId)
+      if (hit) hit.deviceCount += 1
+      else map.set(r.buildingId, { chnID: r.buildingId, chnName: r.buildingName, deviceCount: 1 })
+    }
+    buildingTree.value = [...map.values()].sort((a, b) => a.chnID - b.chnID)
+    health.value = await fetchHealthLevelStats(undefined)
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 侧栏选中范围变化（2 个请求）：§1.4?buildingId + §1.12?buildingId；医院级派生不动 */
+async function loadSelection() {
+  loading.value = true
+  try {
+    const bid = selectedBuilding.value
+    const [rows, stats] = await Promise.all([
+      fetchAllRows(bid),
+      fetchHealthLevelStats(bid ?? undefined),
+    ])
+    cabinets.value = rows
+    browseRows.value = rows
+    health.value = stats
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  void loadHospital()
+})
+
+/** 侧栏切换选中（null=医院）；切换即退出检索/筛选态并重查当前范围 */
+function selectBuilding(id: number | null) {
+  if (selectedBuilding.value === id) return
+  selectedBuilding.value = id
+  deviceSearched.value = false
+  deviceRows.value = []
+  selectedGrade.value = 'all'
+  page.value = 1
+  void loadSelection()
+}
+
 async function doSearch() {
   const q = searchInput.value.trim()
   if (!q || !searchKind.value) return
@@ -112,19 +196,39 @@ async function doSearch() {
   if (searchKind.value === 'cabinet') {
     deviceSearched.value = false
     deviceRows.value = []
-    await catalog.searchCabinets(q)
+    loading.value = true
+    try {
+      // 搜索跟随侧栏选中（用户定稿 B 方案）：医院级不带参，选中楼栋带 buildingId——
+      // 过滤由后端 §1.10 的可选 buildingId 参数完成，前端不做本地过滤
+      const r = await fetchSuperSearch(q, selectedBuilding.value, 1, 200)
+      cabinets.value = r.rows
+    } finally {
+      loading.value = false
+    }
   } else {
-    catalog.clearCabinetSearch()
     deviceSearched.value = true
     searchLoading.value = true
     try {
       const r = await fetchDeviceSearch(q, 1, 200)
-      deviceRows.value = r.rows
+      // 楼栋范围过滤：设备行带 superName，与当前楼栋柜名单求交集（§1.9 无 buildingId 入参）
+      const scope =
+        selectedBuilding.value == null
+          ? null
+          : new Set(browseRows.value.map((c) => c.superName))
+      deviceRows.value =
+        scope == null ? r.rows : r.rows.filter((d) => d.superName != null && scope.has(d.superName))
     } finally {
       searchLoading.value = false
     }
   }
 }
+
+/** 表格空态提示：选中楼栋时 0 匹配引导切回全院检索 */
+const emptyHint = computed(() =>
+  selectedBuilding.value != null && tableMode.value === 'cabinet'
+    ? '当前楼栋下无匹配，可切回「全部楼栋」检索'
+    : '',
+)
 
 function resetSearch() {
   searchInput.value = ''
@@ -132,8 +236,8 @@ function resetSearch() {
   deviceSearched.value = false
   deviceRows.value = []
   selectedGrade.value = 'all'
-  catalog.clearCabinetSearch()
   page.value = 1
+  void loadSelection()
 }
 
 // 按需弹窗/抽屉
@@ -149,10 +253,6 @@ function enterDevice3D(cabinet: SuperDevice) {
   pageTabs.open('/device-detail?superId=' + cabinet.id, '设备详情', 'device-detail')
   void router.push({ path: '/device-detail', query: { superId: String(cabinet.id) } })
 }
-
-onActivated(() => {
-  void catalog.load()
-})
 </script>
 
 <template>
@@ -164,14 +264,10 @@ onActivated(() => {
     </div>
 
     <DeviceSidebar
-      :channels="catalog.buildings.map((b) => ({
-        chnID: b.id,
-        chnName: b.buildingName,
-        deviceCount: catalog.sidebarCounts.byBuilding[b.id] ?? 0,
-      }))"
-      :selected-chn-id="catalog.buildingId"
-      :total-devices="catalog.sidebarCounts.total"
-      @select-channel="catalog.selectBuilding"
+      :channels="buildingTree"
+      :selected-chn-id="selectedBuilding"
+      :total-devices="sidebarTotal"
+      @select-channel="selectBuilding"
     />
 
     <div class="dm-main">
@@ -179,10 +275,10 @@ onActivated(() => {
         <div class="bread-crumbs">
           <span class="crumb">深圳市</span><span class="sep">/</span>
           <span class="crumb">{{ HOSPITAL_NAME }}</span>
-          <template v-if="catalog.buildingId != null"
+          <template v-if="selectedBuilding != null"
             ><span class="sep">/</span
             ><span class="crumb current">{{
-              catalog.buildings.find((b) => b.id === catalog.buildingId)?.buildingName
+              buildingTree.find((t) => t.chnID === selectedBuilding)?.chnName
             }}</span></template
           >
         </div>
@@ -237,9 +333,10 @@ onActivated(() => {
         <CabinetTable
           :mode="tableMode"
           :rows="tableMode === 'device' ? deviceRows : paged"
-          :loading="catalog.loading"
+          :loading="loading"
           :grade-label="gradeLabel"
           :channel-label="channelLabel"
+          :empty-hint="emptyHint"
           :total="tableTotal"
           :page="page"
           :total-pages="totalPages"
