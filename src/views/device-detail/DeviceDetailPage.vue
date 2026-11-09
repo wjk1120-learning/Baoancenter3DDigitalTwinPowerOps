@@ -13,10 +13,10 @@ import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import { createDeviceScene, modelOfType, type DeviceScene } from './engine/deviceScene'
 import type { AlertItem, HistoryAlertRow } from '../../api/hospital/types'
-import type { DeviceBrief, SuperDevice } from '../../api/device/types'
+import type { DeviceBrief, SuperDeviceProfile } from '../../api/device/types'
 import type { EventBrief } from '../../api/event/types'
 import type { CaoliaoRecord, InspectDeviceRecord } from '../../api/operation/types'
-import { fetchDeviceBriefsBySuper } from '../../api/device/device'
+import { fetchDeviceBriefsBySuper, fetchSuperById } from '../../api/device/device'
 import { fetchDeviceHistoryEvents } from '../../api/event/event'
 import { normalizeEventLevel } from '../../api/event/mappers'
 import {
@@ -25,7 +25,6 @@ import {
 } from '../../api/operation/operation'
 import { chartColors } from '../../config/chartColors'
 import { healthGrade } from '../../config/healthGrades'
-import { useDeviceCatalogStore } from '../../store/deviceCatalog'
 import { usePageTabsStore } from '../../store/pageTabs'
 import DeviceInfoCard from './components/DeviceInfoCard.vue'
 import HealthCard from './components/HealthCard.vue'
@@ -38,7 +37,6 @@ import DefectDetailDrawer from '../../components/DefectDetailDrawer.vue'
 
 defineOptions({ name: 'DeviceDetailPage' })
 
-const catalog = useDeviceCatalogStore()
 const pageTabs = usePageTabsStore()
 const route = useRoute()
 const router = useRouter()
@@ -52,30 +50,28 @@ const superIdQuery = computed(() => {
 const fromPowerRoom = computed(() => route.query.from === 'power')
 const backLabel = computed(() => (fromPowerRoom.value ? '返回配电房' : '返回设备管理'))
 
-/** 目录箱柜（store 内带 mock 补充的 buildingId，真实后端无此字段） */
-type CatalogCabinet = SuperDevice & { buildingId?: number }
+/** 单柜详情（新增接口）：基本信息/健康度/楼栋的唯一来源，进入时多增的 1 个请求 */
+const cabinet = ref<SuperDeviceProfile | null>(null)
+const cabinetError = ref('')
 
-const currentCabinet = computed<CatalogCabinet | null>(() => {
+const displayName = computed(() => cabinet.value?.superName || '—')
+const currentBuilding = computed(() => cabinet.value?.buildingName || '—')
+
+/** 拉单柜详情（按路由 superId）；不存在/失败 → null，走「未找到该箱柜」遮罩 + 重试 */
+async function loadCabinet() {
   const sid = superIdQuery.value
-  if (!sid) return null
-  return (catalog.cabinets as CatalogCabinet[]).find((c) => c.id === sid) ?? null
-})
-const displayName = computed(() => currentCabinet.value?.superName || '—')
-const currentBuilding = computed(
-  () => catalog.buildings.find((b) => b.id === currentCabinet.value?.buildingId)?.buildingName || '—',
-)
+  if (!sid) {
+    cabinet.value = null
+    return
+  }
+  cabinetError.value = ''
+  cabinet.value = await fetchSuperById(sid).catch(() => null)
+}
 
 /** §1.8 箱柜下设备列表（精简，页面拉一次供电能趋势下拉用；2026-11-06 用户拍板弃 §1.7） */
 const cabDevices = ref<DeviceBrief[]>([])
 
 const pageReady = ref(false)
-const catalogError = ref('')
-async function ensureCatalog() {
-  if (catalog.cabinets.length) return
-  catalogError.value = ''
-  await catalog.load()
-  catalogError.value = catalog.error
-}
 
 // ---- 告警记录：卡内自带开关下拉，与电能趋势解耦（2026-11-06 用户拍板）——
 // 选中只驱动 §3.3 一个请求；电能趋势选中只驱动 §2.4 ----
@@ -118,7 +114,7 @@ watch(alertDeviceId, () => void loadHistory())
 const maintenanceRecords = ref<InspectDeviceRecord[]>([])
 const maintLoading = ref(false)
 async function loadMaintenance() {
-  const num = currentCabinet.value?.deviceNumber || ''
+  const num = cabinet.value?.deviceNumber || ''
   maintLoading.value = true
   try {
     maintenanceRecords.value = num ? await fetchInspectionRecordsByDeviceNumber(num) : []
@@ -134,7 +130,7 @@ const defectLoading = ref(false)
 const defectDrawerShow = ref(false)
 const activeDefect = ref<CaoliaoRecord | null>(null)
 async function loadDefects() {
-  const num = currentCabinet.value?.deviceNumber || ''
+  const num = cabinet.value?.deviceNumber || ''
   defectLoading.value = true
   try {
     defectRecords.value = num ? await fetchDefectRecordsByDeviceNumber(num) : []
@@ -151,7 +147,7 @@ function openDefect(rec: CaoliaoRecord) {
 
 // ---- 健康度（柜表 pill 同口径：优/良主题蓝、一般琥珀、较差/极差红——待用户确认） ----
 const healthScore = computed(() => {
-  const h = currentCabinet.value?.health
+  const h = cabinet.value?.health
   if (h == null || !Number.isFinite(h)) return null
   return Math.round(h)
 })
@@ -222,7 +218,7 @@ let sceneManager: DeviceScene | null = null
 const sceneError = ref<string | null>(null)
 
 async function initScene() {
-  const cab = currentCabinet.value
+  const cab = cabinet.value
   if (!sceneEl.value || !cab) return
   const w = sceneEl.value.clientWidth
   const h = sceneEl.value.clientHeight
@@ -268,15 +264,25 @@ async function bootScene() {
 }
 
 watch(superIdQuery, () => {
-  if (pageReady.value) void bootScene()
+  if (!pageReady.value) return
+  void (async () => {
+    await loadCabinet()
+    await bootScene()
+  })()
 })
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown, true)
-  await ensureCatalog()
+  await loadCabinet()
   pageReady.value = true
   await bootScene()
 })
+
+/** 遮罩「重试」：重新拉单柜并继续启动 */
+async function reload() {
+  await loadCabinet()
+  await bootScene()
+}
 onActivated(() => {
   if (pageReady.value && !sceneManager) nextTick(() => void initScene())
 })
@@ -330,17 +336,17 @@ function onKeydown(e: KeyboardEvent) {
 
     <div v-if="!pageReady" class="model-load-overlay">
       <div class="load-box">
-        <template v-if="catalogError">
+        <template v-if="cabinetError">
           <div class="load-title">设备档案加载失败</div>
-          <div class="load-hint">{{ catalogError }}</div>
-          <button type="button" class="load-retry" @click="ensureCatalog">重试</button>
+          <div class="load-hint">{{ cabinetError }}</div>
+          <button type="button" class="load-retry" @click="reload">重试</button>
         </template>
         <div v-else class="load-hint">正在加载设备档案…</div>
       </div>
     </div>
 
     <template v-else>
-      <div v-if="!currentCabinet" class="model-load-overlay">
+      <div v-if="!cabinet" class="model-load-overlay">
         <div class="load-box">
           <div class="load-hint">未找到该箱柜（superId={{ superIdQuery || '—' }}），请从设备管理或配电房重新进入。</div>
         </div>
@@ -355,10 +361,10 @@ function onKeydown(e: KeyboardEvent) {
         <aside class="side left">
           <DeviceInfoCard
             :name="displayName"
-            :device-number="currentCabinet.deviceNumber"
-            :device-type="currentCabinet.deviceType"
+            :device-number="cabinet.deviceNumber"
+            :device-type="cabinet.deviceType"
             :building-name="currentBuilding"
-            :commission-date="currentCabinet.commissionDate || ''"
+            :commission-date="cabinet.commissionDate || ''"
           />
           <DefectCard :records="defectRecords" :loading="defectLoading" @open="openDefect" />
           <HistoryAlertCard
@@ -379,7 +385,7 @@ function onKeydown(e: KeyboardEvent) {
           />
         </aside>
 
-        <EnergyTrendPanel :super-id="currentCabinet.id" :devices="cabDevices" />
+        <EnergyTrendPanel :super-id="cabinet.id" :devices="cabDevices" />
 
         <DefectDetailDrawer v-model:show="defectDrawerShow" :record="activeDefect" />
         <AlertDetailDrawer :alert="detailAlert" @close="detailAlert = null" />
