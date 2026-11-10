@@ -1,8 +1,17 @@
 import { eventRows } from './event'
 import type { EventBrief } from '../../api/event/types'
 import type { DeviceDetail, DeviceHealthLevelStats, MeasInfo, SuperDevice } from '../../api/device/types'
-import { superNameFor } from '../../views/power-room/data/powerRoom'
 import config from '../../views/power-room/data/power-rooms.json'
+
+/** 房间 id → 短名（room-1 → 1#变）：宝中 mock 数据生成口径，仅 mock 消费 */
+function roomShortName(roomId: string): string {
+  return `${Number(roomId.replace('room-', ''))}#变`
+}
+
+/** 房间 + 柜名 → 台账箱柜名（本目录 superName 的唯一生成口径） */
+function superNameFor(roomId: string, cabName: string): string {
+  return `${roomShortName(roomId)} ${cabName}`
+}
 
 /**
  * 设备目录假数据：从宝中自己的 power-rooms.json（6 房 31 柜，与配电房 3D 页同源）按
@@ -79,7 +88,7 @@ export const cabinets: (SuperDevice & {
   }
 }
 
-// ---- 箱柜下设备明细（§1.7）：deviceCount 台，命名「测点 k」；告警数按柜名关联挂 1 号测点 ----
+// ---- 箱柜下设备明细（§1.7）：deviceCount 台，命名「{柜名} 测点 k」；告警数按柜名关联挂 1 号测点 ----
 export const devices: DeviceDetail[] = []
 for (const cab of cabinets) {
   for (let k = 1; k <= cab.deviceCount; k++) {

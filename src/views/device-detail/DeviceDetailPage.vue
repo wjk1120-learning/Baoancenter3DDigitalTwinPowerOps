@@ -18,7 +18,7 @@ import type { EventBrief } from '../../api/event/types'
 import type { CaoliaoRecord, InspectDeviceRecord } from '../../api/operation/types'
 import { fetchDeviceBriefsBySuper, fetchSuperById } from '../../api/device/device'
 import { fetchDeviceHistoryEvents } from '../../api/event/event'
-import { normalizeEventLevel } from '../../api/event/mappers'
+import { eventBriefToHistoryRow } from '../../api/event/mappers'
 import {
   fetchDefectRecordsByDeviceNumber,
   fetchInspectionRecordsByDeviceNumber,
@@ -80,18 +80,6 @@ const alertDeviceId = ref<number | null>(null)
 const historyAlerts = ref<HistoryAlertRow[]>([])
 const historyLoading = ref(false)
 
-function briefToHistoryRow(e: EventBrief): HistoryAlertRow {
-  const lv = normalizeEventLevel(e.eventLevel)
-  return {
-    id: e.eventId,
-    time: e.timeStr,
-    content: e.description,
-    level: lv === 1 ? 'error' : 'warn',
-    status: e.handleStatus === 1 ? 'done' : 'pending',
-    eventLevel: lv,
-  }
-}
-
 async function loadHistory() {
   const id = alertDeviceId.value
   if (id == null) {
@@ -101,7 +89,7 @@ async function loadHistory() {
   historyLoading.value = true
   try {
     const events = await fetchDeviceHistoryEvents(id).catch(() => [] as EventBrief[])
-    historyAlerts.value = events.map(briefToHistoryRow)
+    historyAlerts.value = events.map(eventBriefToHistoryRow)
   } finally {
     historyLoading.value = false
   }

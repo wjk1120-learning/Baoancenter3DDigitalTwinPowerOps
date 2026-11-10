@@ -38,7 +38,13 @@ const router = createRouter({
     },
     // 调试页仅 dev 注册（import.meta.env.DEV 构建期替换，生产不含此 chunk）
     ...(import.meta.env.DEV
-      ? [{ path: '/tests/mock', component: () => import('../tests/MockDebugPage.vue') }]
+      ? [
+          { path: '/tests/mock', component: () => import('../tests/MockDebugPage.vue') },
+          {
+            path: '/tests/power-room',
+            component: () => import('../tests/PowerRoomDebugPage.vue'),
+          },
+        ]
       : []),
     { path: '/:pathMatch(.*)*', redirect: '/power-room' },
   ],

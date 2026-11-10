@@ -1,4 +1,4 @@
-import type { AlertDetail, AlertEventLevel, AlertItem } from '../hospital/types'
+import type { AlertDetail, AlertEventLevel, AlertItem, HistoryAlertRow } from '../hospital/types'
 import type { AlertLocation, DeviceEventGroup, EventBrief, EventInfo } from './types'
 
 /**
@@ -158,5 +158,18 @@ export function coerceEventInfo(raw: unknown): EventInfo | null {
     handleStatus: Number(o.handleStatus ?? 0),
     locations,
     updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
+  }
+}
+
+/** EventBrief → 历史告警行（设备详情页/配电房点柜看板共用；等级→粗粒度、处理状态→字符串） */
+export function eventBriefToHistoryRow(e: EventBrief): HistoryAlertRow {
+  const eventLevel = normalizeEventLevel(e.eventLevel)
+  return {
+    id: e.eventId,
+    time: e.timeStr,
+    content: e.description,
+    level: eventLevel === 1 ? 'error' : 'warn',
+    status: e.handleStatus === 1 ? 'done' : 'pending',
+    eventLevel,
   }
 }
