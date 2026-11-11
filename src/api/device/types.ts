@@ -1,11 +1,5 @@
 /** 设备管理模块契约类型（docs/FY-Hospital-API-v3.90.md §1，字段只认文档所载） */
 
-/** §1.2 楼栋 */
-export interface BuildingInfo {
-  id: number
-  buildingName: string
-}
-
 /** §1.4 箱柜（SuperDevice） */
 export interface SuperDevice {
   id: number

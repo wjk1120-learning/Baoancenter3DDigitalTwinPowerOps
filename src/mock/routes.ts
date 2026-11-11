@@ -15,7 +15,6 @@ import {
   getInspectionByDeviceNumber,
 } from './data/operation'
 import {
-  buildings,
   getBriefDevicesBySuper,
   getDevicesBySuper,
   getEventCountByDevice,
@@ -24,7 +23,6 @@ import {
   getLevelCountsBySuper,
   getMeasurementsByDeviceId,
   getSuperById,
-  getSuperCount,
   getSuperPage,
   getSwitchingList,
   getSwitchingSupers,
@@ -120,13 +118,9 @@ const routes: MockRoute[] = [
   // 3.9 手动触发事件同步（恒返 0 = 互斥跳过语义）
   route('POST /event/sync', () => 0),
 
-  // ── 设备管理（§1，用户拍板范围：无配电房级联/无 1.14-1.16/无导出）──
-  // §1.2 楼栋列表
-  route('GET /device/buildings', () => buildings),
+  // ── 设备管理（§1，用户拍板范围：无 §1.2/§1.5/§1.13/1.14-1.16/无导出）──
   // §1.4 箱柜分页（buildingId 可选；有开关优先→ID 升序）
   route('GET /device/super-devices', ({ query }) => getSuperPage(query)),
-  // §1.5 箱柜计数
-  route('GET /device/super-devices/count', ({ query }) => getSuperCount(query)),
   // §1.7 箱柜下设备明细分页
   route('GET /device/super-devices/:superId/devices', ({ params, query }) =>
     getDevicesBySuper(query, Number(params.superId)),
@@ -139,7 +133,7 @@ const routes: MockRoute[] = [
   route('GET /device/search', ({ query }) => searchDevices(query)),
   // §1.10 柜名模糊检索
   route('GET /device/super-devices/search', ({ query }) => searchSupers(query)),
-  // 单柜详情（联调新增接口）。⚠ 必须排在 count/search 字面路由之后：
+  // 单柜详情（联调新增接口）。⚠ 必须排在 search 字面路由之后：
   // 3 段参数路由 :superId 会吞掉同段数的字面段（mock 匹配器按登记顺序）
   route('GET /device/super-devices/:superId', ({ params }) => getSuperById(Number(params.superId))),
   // §1.3 配电房列表

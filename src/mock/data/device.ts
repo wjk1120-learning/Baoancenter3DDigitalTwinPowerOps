@@ -20,8 +20,8 @@ function superNameFor(roomId: string, cabName: string): string {
  * 告警数据（data/event.ts）的 deviceName 与本目录 superName 精确同名，实现按设备/按柜的告警关联。
  */
 
-// ---- 楼栋（用户提供的真实命名） ----
-export const buildings = [
+// ---- 楼栋（用户提供的真实命名；仅供本文件生成柜行的楼栋字段，§1.2 接口已拍板不做） ----
+const buildings = [
   { id: 1, buildingName: '门诊1号楼' },
   { id: 2, buildingName: '门诊2号楼' },
   { id: 3, buildingName: '综合楼' },
@@ -124,12 +124,6 @@ export function getSuperPage(query: { buildingId?: string; page?: string; pageSi
     total: pool.length,
     rows: pool.slice((page - 1) * pageSize, page * pageSize),
   }
-}
-
-/** §1.5 箱柜计数（buildingId 可选） */
-export function getSuperCount(query: { buildingId?: string }) {
-  const buildingId = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
-  return cabinets.filter((c) => buildingId == null || c.buildingId === buildingId).length
 }
 
 function superIdOfDevice(d: DeviceDetail): number {
