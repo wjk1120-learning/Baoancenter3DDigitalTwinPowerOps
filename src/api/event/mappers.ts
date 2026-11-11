@@ -4,7 +4,7 @@ import type { AlertLocation, DeviceEventGroup, EventBrief, EventInfo } from './t
 /**
  * 事件映射纯函数（无网络、无缓存，带单测）：EventBrief/EventInfo ↔ AlertItem/AlertDetail、
  * 等级与处理状态归一。
- * 契约唯一依据 = docs/FY-Hospital-API-v3.90.md（§3 事件 / §5.1 WS 消息）；字段只认文档
+ * 契约唯一依据 = docs/FY-Hospital-API.md（§3 事件 / §7.1 WS 消息）；字段只认文档
  * 所载（camelCase），不做福永式大小写兜底/野字段兜底/已下线字段兼容。
  */
 
@@ -135,7 +135,7 @@ export function coerceEventBrief(raw: unknown): EventBrief | null {
   }
 }
 
-/** WS EventInfo（§5.1 推送完整结构）字段归一化 */
+/** WS EventInfo（§7.1 推送完整结构）字段归一化 */
 export function coerceEventInfo(raw: unknown): EventInfo | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>

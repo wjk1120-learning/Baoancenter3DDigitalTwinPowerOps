@@ -8,7 +8,7 @@
 1. **拷目录**：把 `src/views/power-room/` 整个拷进新项目。
 2. **改接口前缀**：`utils/http/clients.ts` 里 http 实例的 `baseURL` 改成新医院前缀
    （宝中是 `/bz-hospital`）。api 层（`api/device/device.ts`）全部是契约相对路径
-   （`/device/switchings` 等），**不用改**——所有医院共用同一份契约（docs/FY-Hospital-API-v3.90.md），
+   （`/device/switchings` 等），**不用改**——所有医院共用同一份契约（docs/FY-Hospital-API.md），
    数据请求链路：§1.3 房列表 → §1.6 房下柜（按房缓存）→ 点柜 §1.8 开关 → §1.11/§3.3 跟随选中开关。
 3. **出图纸**：改 `data/power-rooms.json`（房名/柜位/柜号/devCode/pitch），由采集表工具链生成：
    `node scripts/excel-to-rooms.mjs`（devCode 必填+全表唯一，缺/重报错不写盘）→

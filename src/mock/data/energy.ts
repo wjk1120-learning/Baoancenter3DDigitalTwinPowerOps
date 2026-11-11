@@ -1,5 +1,5 @@
 /**
- * §2.4 按设备查询近 30 天每日能耗（假数据，docs/FY-Hospital-API-v3.90.md）。
+ * §2.4 按设备查询近 30 天每日能耗（假数据，docs/FY-Hospital-API.md）。
  * 固定近 30 个完整日（截至昨日）按日期升序；无读数日 energyKwh/carbonKg 为 null（折线断点）。
  * 确定性生成：同一天内同一 deviceId 生成相同序列，页面刷新不跳变；
  * deviceId % 5 === 0 视为无能耗设备（契约：此类设备全部日期为 null）。

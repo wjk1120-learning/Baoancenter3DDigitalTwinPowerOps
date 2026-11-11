@@ -1,4 +1,4 @@
-/** 运维管理模块契约类型（docs/FY-Hospital-API-v3.90.md §4 巡检/缺陷，字段只认文档所载） */
+/** 运维管理模块契约类型（docs/FY-Hospital-API.md §4 巡检/缺陷，字段只认文档所载） */
 
 /** §4.1 InspectDeviceRecord（按箱柜编号查询的巡检/维护记录） */
 export interface InspectDeviceRecord {

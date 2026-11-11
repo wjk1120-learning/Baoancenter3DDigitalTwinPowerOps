@@ -1,5 +1,5 @@
 /**
- * §4.1 巡检记录 / §4.2 缺陷记录（假数据，docs/FY-Hospital-API-v3.90.md）。
+ * §4.1 巡检记录 / §4.2 缺陷记录（假数据，docs/FY-Hospital-API.md）。
  * mock 台账里只有 P01/T1 进线柜（BZ000021）与 P02/T1 电容柜（BZ000022）带真实 devCode
  * （power-rooms.json），其余柜编号为生成的 BZ7xxxxx —— 维护/缺陷记录只挂这两台真实编号柜，
  * 其余柜走空态；联调切真后被草料落库数据覆盖。

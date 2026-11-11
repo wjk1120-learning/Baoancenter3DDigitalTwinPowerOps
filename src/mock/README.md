@@ -1,6 +1,6 @@
 # src/mock — 宝中占位假数据（唯一出处）
 
-后端未就绪期间的占位层。**api 契约唯一依据 = `docs/FY-Hospital-API-v3.90.md`（用户提供的权威文档）**，
+后端未就绪期间的占位层。**api 契约唯一依据 = `docs/FY-Hospital-API.md`（用户提供的权威文档）**，
 认证中心见 `docs/福永接口契约参考-Operation-Platform-API.md`；福永的 api 层实现不作依据（有用错用混前科）。
 真后端就绪后：`.env.development` 的 `VITE_USE_MOCK=false` 即切真联调；
 稳定上线后**删除本目录即退役**，业务代码零残留。

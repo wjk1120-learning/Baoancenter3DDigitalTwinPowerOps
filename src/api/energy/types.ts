@@ -1,4 +1,4 @@
-/** §2.4 DeviceDailyEnergy（docs/FY-Hospital-API-v3.90.md 能耗管理模块） */
+/** §2.4 DeviceDailyEnergy（docs/FY-Hospital-API.md 能耗管理模块） */
 
 /** 按设备查询近 30 天每日能耗行（固定 30 条按日升序；无读数日为 null） */
 export interface DeviceDailyEnergy {

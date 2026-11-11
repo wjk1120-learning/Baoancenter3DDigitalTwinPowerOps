@@ -1,5 +1,5 @@
 /**
- * 能耗接口（§2.4，契约唯一依据 = docs/FY-Hospital-API-v3.90.md）。
+ * 能耗接口（§2.4，契约唯一依据 = docs/FY-Hospital-API.md）。
  * 4.3 设备详情页「电能趋势」面板用：按设备查近 30 个完整日（截至昨日）逐日电量。
  */
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'

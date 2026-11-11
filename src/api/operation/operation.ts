@@ -1,5 +1,5 @@
 /**
- * 运维管理接口（§4.1/§4.2，契约唯一依据 = docs/FY-Hospital-API-v3.90.md）。
+ * 运维管理接口（§4.1/§4.2，契约唯一依据 = docs/FY-Hospital-API.md）。
  * 4.3 设备详情页「维护记录/缺陷记录」卡片按需请求；4.4 缺陷管理复用本模块。
  */
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
