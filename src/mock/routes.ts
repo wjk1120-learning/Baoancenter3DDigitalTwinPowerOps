@@ -1,5 +1,14 @@
 import type { EventBrief } from '../api/event/types'
 import { eventRows } from './data/event'
+import {
+  addMockCamera,
+  cameraRows,
+  deleteMockCamera,
+  getMockCaptureUrl,
+  getMockLiveUrl,
+  getMockPlaybackUrl,
+  updateMockCamera,
+} from './data/ezviz'
 import { getDeviceDailyStats } from './data/energy'
 import {
   getDefectByDeviceNumber,
@@ -173,6 +182,25 @@ const routes: MockRoute[] = [
   route('GET /operation/defect-records', ({ query }) =>
     getDefectByDeviceNumber(query.deviceNumber ?? ''),
   ),
+
+  // ── 萤石视频监控（§6，环境监控页）──
+  // §6.1 摄像头台账列表
+  route('GET /ezviz/cameras', () => cameraRows),
+  // §6.5 直播取流（假 ezopen 地址 + 假 accessToken，真播放器播不了按「无画面隐藏」消隐）
+  route('GET /ezviz/cameras/:id/live-url', ({ params }) => getMockLiveUrl(Number(params.id))),
+  // §6.6 回放取流
+  route('GET /ezviz/cameras/:id/playback-url', ({ params }) =>
+    getMockPlaybackUrl(Number(params.id)),
+  ),
+  // §6.7 抓拍当前画面
+  route('POST /ezviz/cameras/:id/capture', ({ params }) => getMockCaptureUrl(Number(params.id))),
+  // §6.2 新增台账（改数据数组，台账抽屉/视频墙联动）
+  route('POST /ezviz/cameras', ({ body }) => addMockCamera(body ?? {})),
+  // §6.3/6.4 修改/删除台账（4 段参数路由与上面 2 段字面路由段数不同，无吞并问题）
+  route('POST /ezviz/cameras/:id/update', ({ params, body }) =>
+    updateMockCamera(Number(params.id), body ?? {}),
+  ),
+  route('POST /ezviz/cameras/:id/delete', ({ params }) => deleteMockCamera(Number(params.id))),
 ]
 
 /** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */

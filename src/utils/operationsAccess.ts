@@ -10,9 +10,17 @@ export interface NavUser {
 export const EXTERNAL_USER_LEVEL = 2
 
 /**
+ * 内部人员判定（userLevel !== 2）：页面内按身份显隐的功能（如环境监控的台账管理
+ * 按钮）统一走这里；管理员 / 普通员工、以及用户信息缺失时视为内部（同款兜底口径）。
+ */
+export function isInternalStaff(user: NavUser | null): boolean {
+  return user?.userLevel !== EXTERNAL_USER_LEVEL
+}
+
+/**
  * 运维平台入口权限：外部人员没有运维平台权限，顶部下拉不展示「运维平台」。
  * 管理员 / 普通员工、以及用户信息缺失时保持可见（福永 operationsAccess.ts 同款规则）。
  */
 export function canAccessOperationsPlatform(user: NavUser | null): boolean {
-  return user?.userLevel !== EXTERNAL_USER_LEVEL
+  return isInternalStaff(user)
 }

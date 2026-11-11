@@ -25,6 +25,7 @@
   "dependencies": {
     "axios": "^1.21.0",
     "echarts": "^6.1.0",
+    "ezuikit-js": "^9.0.26",
     "naive-ui": "^2.45.3",
     "pinia": "^4.1.0",
     "three": "^0.186.1",

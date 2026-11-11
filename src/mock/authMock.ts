@@ -32,3 +32,20 @@ export function seedMockSession(level: 1 | 2 = 1, force = false): void {
   writeAuthSession(vo)
   console.info(`[mock] 已播种假会话（userLevel=${level}）`)
 }
+
+/** 调试页切身份标记（sessionStorage：同 tab 跨刷新保留，关 tab 即散，互不串扰） */
+const MOCK_LEVEL_FLAG = 'bz_mock_level'
+
+/** 调试页切换身份时记录所选等级，startup 播种据此保留调试态 */
+export function setMockLevelFlag(level: 1 | 2): void {
+  sessionStorage.setItem(MOCK_LEVEL_FLAG, String(level))
+}
+
+/**
+ * mock 启动播种（main.ts 专用）：默认强制回到内部人员；仅当调试页标记过外部身份时
+ * 才按标记播种——历史残留的外部会话不再把默认态带歪（用户拍板：默认内部）。
+ */
+export function seedMockSessionOnStart(): void {
+  const flag = sessionStorage.getItem(MOCK_LEVEL_FLAG)
+  seedMockSession(flag === '2' ? 2 : 1, true)
+}

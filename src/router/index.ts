@@ -11,6 +11,7 @@ const REAL_PAGES: Record<string, () => Promise<Component>> = {
   'power-room': () => import('../views/power-room/PowerRoomPage.vue'),
   alert: () => import('../views/alert-center/AlertCenterPage.vue'),
   device: () => import('../views/device-management/DeviceManagementPage.vue'),
+  monitor: () => import('../views/environment-monitor/EnvironmentMonitorPage.vue'),
 }
 
 /**
@@ -44,6 +45,7 @@ const router = createRouter({
             path: '/tests/power-room',
             component: () => import('../tests/PowerRoomDebugPage.vue'),
           },
+          { path: '/tests/camera', component: () => import('../tests/CameraDebugPage.vue') },
         ]
       : []),
     { path: '/:pathMatch(.*)*', redirect: '/power-room' },

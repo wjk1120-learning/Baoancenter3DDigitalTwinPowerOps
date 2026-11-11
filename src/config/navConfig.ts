@@ -11,8 +11,8 @@ export interface NavItemConfig {
 export const OPERATIONS_NAV_ROUTE = '__operations__'
 
 /**
- * 顶部导航：医院总览 / 设备管理 / 配电房 / 告警中心 / 缺陷管理 / 培训平台 / 运维平台。
- * 除配电房为实页外均为占位页；「运维平台」按内部人员显隐（utils/operationsAccess）。
+ * 顶部导航：医院总览 / 设备管理 / 配电房 / 告警中心 / 缺陷管理 / 环境监控 / 培训平台 / 运维平台。
+ * 除实页（见 router REAL_PAGES）外均为占位页；「运维平台」按内部人员显隐（utils/operationsAccess）。
  */
 export const navConfig: NavItemConfig[] = [
   { id: 'overview', name: '医院总览', route: '/hospital' },
@@ -20,6 +20,7 @@ export const navConfig: NavItemConfig[] = [
   { id: 'power-room', name: '配电房', route: '/power-room' },
   { id: 'alert', name: '告警中心', route: '/alert' },
   { id: 'defect', name: '缺陷管理', route: '/defect' },
+  { id: 'monitor', name: '环境监控', route: '/monitor' },
   { id: 'training', name: '培训平台', route: '/training' },
   {
     id: 'operations',
