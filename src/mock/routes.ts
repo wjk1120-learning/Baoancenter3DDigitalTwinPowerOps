@@ -11,10 +11,13 @@ import {
 } from './data/ezviz'
 import { getDeviceDailyStats } from './data/energy'
 import {
+  getCabinetDefects,
   getDefectByDeviceNumber,
+  getDefectStats,
   getInspectionByDeviceNumber,
 } from './data/operation'
 import {
+  buildings,
   getBriefDevicesBySuper,
   getDevicesBySuper,
   getEventCountByDevice,
@@ -118,7 +121,9 @@ const routes: MockRoute[] = [
   // 3.9 手动触发事件同步（恒返 0 = 互斥跳过语义）
   route('POST /event/sync', () => 0),
 
-  // ── 设备管理（§1，用户拍板范围：无 §1.2/§1.5/§1.13/1.14-1.16/无导出）──
+  // ── 设备管理（§1；不做 §1.5/§1.13/§1.14-1.16/导出。§1.2 楼栋 2026-11-12 缺陷管理页恢复调用）──
+  // §1.2 楼栋列表（全量含 0 柜楼栋；缺陷管理页楼栋树/面包屑）
+  route('GET /device/buildings', () => buildings),
   // §1.4 箱柜分页（buildingId 可选；有开关优先→ID 升序）
   route('GET /device/super-devices', ({ query }) => getSuperPage(query)),
   // §1.7 箱柜下设备明细分页
@@ -176,6 +181,10 @@ const routes: MockRoute[] = [
   route('GET /operation/defect-records', ({ query }) =>
     getDefectByDeviceNumber(query.deviceNumber ?? ''),
   ),
+  // §4.3 缺陷处理状态统计（⚠ buildingId 参数=用户 2026-11-11 与后端新约定，契约 v5.2 仍为 deviceNumber 待后端改）
+  route('GET /operation/defect-records/stats', ({ query }) => getDefectStats(query)),
+  // §4.5 箱柜缺陷联合查询（分页；行序同 §1.4；传任一筛选后仅返回有匹配缺陷的箱柜）
+  route('GET /operation/cabinet-defects', ({ query }) => getCabinetDefects(query)),
 
   // ── 萤石视频监控（§6，环境监控页）──
   // §6.1 摄像头台账列表

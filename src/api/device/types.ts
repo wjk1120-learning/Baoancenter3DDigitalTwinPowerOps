@@ -61,6 +61,13 @@ export interface SuperDeviceProfile {
   buildingName: string
 }
 
+/** §1.2 楼栋（Building；缺陷管理页楼栋树/面包屑数据源，2026-11-12 恢复调用——设备管理页仍从 §1.4 行派生，不调用本接口） */
+export interface BuildingInfo {
+  /** 楼栋 ID */
+  id: number
+  buildingName: string
+}
+
 /** §1.3 配电房（switching） */
 export interface SwitchingInfo {
   /** 配电房 ID（§1.6 的入参 switchingId） */

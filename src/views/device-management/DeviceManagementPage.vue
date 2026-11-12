@@ -20,7 +20,7 @@ import {
   healthGrade,
   type HealthGrade,
 } from '../../config/healthGrades'
-import DeviceSidebar from './components/DeviceSidebar.vue'
+import ChannelSidebar from '../../components/ChannelSidebar.vue'
 import CabinetTable from './components/CabinetTable.vue'
 import HealthAside from '../../components/HealthAside.vue'
 import PointListDialog from './components/PointListDialog.vue'
@@ -263,7 +263,7 @@ function enterDevice3D(cabinet: SuperDevice) {
       <div class="dm-bg-glow b" />
     </div>
 
-    <DeviceSidebar
+    <ChannelSidebar
       :channels="buildingTree"
       :selected-chn-id="selectedBuilding"
       :total-devices="sidebarTotal"

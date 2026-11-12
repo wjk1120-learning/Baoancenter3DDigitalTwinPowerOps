@@ -4,7 +4,8 @@ import { ref } from 'vue'
 export interface SidebarChannel {
   chnID: number
   chnName: string
-  deviceCount: number
+  /** 楼栋角标计数；不传不显示（缺陷管理页 §1.2 楼栋无柜数） */
+  deviceCount?: number
 }
 
 defineProps<{
@@ -71,7 +72,7 @@ function selectHospitalNode() {
                 @click="emit('select-channel', ch.chnID)"
               >
                 <span class="tdot" /><span class="tlabel" :title="ch.chnName">{{ ch.chnName }}</span
-                ><span class="tcount">{{ ch.deviceCount }}</span>
+                ><span v-if="ch.deviceCount != null" class="tcount">{{ ch.deviceCount }}</span>
               </div>
             </div>
           </div>

@@ -36,7 +36,7 @@ src/housemodels/
 # GLB ģ���ļ��ϴ����� GitHub �����ṩ
 public/models/*.glb
 
-docs/*
+/docs/*
 scripts/*
 *.tsbuildinfo
 /tests/

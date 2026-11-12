@@ -20,8 +20,8 @@ function superNameFor(roomId: string, cabName: string): string {
  * 告警数据（data/event.ts）的 deviceName 与本目录 superName 精确同名，实现按设备/按柜的告警关联。
  */
 
-// ---- 楼栋（用户提供的真实命名；仅供本文件生成柜行的楼栋字段，§1.2 接口已拍板不做） ----
-const buildings = [
+// ---- 楼栋（用户提供的真实命名；§1.2 mock 数据源——缺陷管理页 2026-11-12 恢复调用，设备管理页仍从柜行派生不用本表） ----
+export const buildings = [
   { id: 1, buildingName: '门诊1号楼' },
   { id: 2, buildingName: '门诊2号楼' },
   { id: 3, buildingName: '综合楼' },

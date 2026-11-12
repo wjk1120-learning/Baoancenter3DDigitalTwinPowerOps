@@ -7,7 +7,13 @@
  * 图片用内联 SVG data URL（无外网依赖，同时让缩略图/抽屉图片区有内容可渲染）。
  */
 
-import type { CaoliaoRecord, InspectDeviceRecord } from '../../api/operation/types'
+import { cabinets } from './device'
+import type {
+  CabinetDefectOverview,
+  CaoliaoRecord,
+  DefectStats,
+  InspectDeviceRecord,
+} from '../../api/operation/types'
 
 /** 生成一张占位 SVG 图片（data URL），label 标在图中央 */
 function img(label: string): string {
@@ -196,4 +202,89 @@ export function getDefectByDeviceNumber(deviceNumber: string): CaoliaoRecord[] {
   return defectRecords
     .filter((r) => r.defectInfo.hazardDeviceNumber === num)
     .sort((a, b) => b.recordTime.localeCompare(a.recordTime))
+}
+
+/** 缺陷记录 → 柜 → 楼栋归属（§4.3/§4.5 按楼栋过滤链：hazardDeviceNumber ↔ cabinets.deviceNumber） */
+function buildingIdOfDevice(num: string): number | null {
+  return cabinets.find((c) => c.deviceNumber === num)?.buildingId ?? null
+}
+
+/** §4.3 缺陷处理状态统计。
+ *  ⚠ 参数与契约 v5.2 原文不同：buildingId 选填 = 用户 2026-11-11 与后端新约定（原文 deviceNumber，后端待改）；
+ *  不传统计全量，传入仅统计可归属该楼栋箱柜的记录（新表单按编号匹配，与 §4.2 同口径）。 */
+export function getDefectStats(query: { buildingId?: string }): DefectStats {
+  const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
+  const pool = defectRecords.filter((r) => {
+    if (bid == null) return true
+    const num = r.defectInfo.hazardDeviceNumber
+    return num != null && buildingIdOfDevice(num) === bid
+  })
+  const by = (state: string) => pool.filter((r) => r.processState === state).length
+  return {
+    total: pool.length,
+    pending: by('待处理'),
+    processing: by('处理中'),
+    done: by('已完成'),
+    skipped: by('无需处理'),
+  }
+}
+
+/** 匹配集合的最新 foundDate（yyyy-MM-dd 字典序最大；契约口径 = 最新一条记录的表单"日期"字段） */
+function latestFoundDate(records: CaoliaoRecord[]): string | null {
+  let latest: string | null = null
+  for (const r of records) {
+    const day = r.defectInfo.foundDate ?? r.recordTime.slice(0, 10)
+    if (latest == null || day > latest) latest = day
+  }
+  return latest
+}
+
+/** §4.5 箱柜缺陷联合查询（分页；一行一箱柜；行序同 §1.4 有开关优先→id 升序）。
+ *  筛选语义照契约：不传任何条件返回全部箱柜（hasDefect 0/1 混合）；传任一条件（riskLevel/
+ *  startDate/endDate）后仅返回存在匹配缺陷记录的箱柜，defectCount/latestDefectDate 按匹配后
+ *  集合统计；时间按记录时间日期部分闭区间可单边；buildingId 只缩柜范围不改筛选语义。 */
+export function getCabinetDefects(query: {
+  riskLevel?: string
+  startDate?: string
+  endDate?: string
+  buildingId?: string
+  page?: string
+  pageSize?: string
+}): { total: number; rows: CabinetDefectOverview[] } {
+  const risk = (query.riskLevel ?? '').trim()
+  const start = (query.startDate ?? '').trim()
+  const end = (query.endDate ?? '').trim()
+  const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
+  const hasFilter = Boolean(risk || start || end)
+
+  const matchedFor = (deviceNumber: string) =>
+    defectRecords.filter((r) => {
+      if (r.defectInfo.hazardDeviceNumber !== deviceNumber) return false
+      if (risk && r.defectInfo.riskLevel !== risk) return false
+      const day = r.recordTime.slice(0, 10)
+      if (start && day < start) return false
+      if (end && day > end) return false
+      return true
+    })
+
+  const pool = cabinets
+    .filter((c) => bid == null || c.buildingId === bid)
+    .sort((a, b) => b.status - a.status || a.id - b.id)
+    .map((c) => {
+      const hits = matchedFor(c.deviceNumber)
+      return {
+        buildingName: c.buildingName || null,
+        deviceNumber: c.deviceNumber,
+        superName: c.superName,
+        deviceType: c.deviceType,
+        hasDefect: hits.length > 0,
+        defectCount: hits.length,
+        latestDefectDate: hits.length > 0 ? latestFoundDate(hits) : null,
+      }
+    })
+    .filter((row) => (hasFilter ? row.defectCount > 0 : true))
+
+  const page = Math.max(1, Number(query.page) || 1)
+  const pageSize = Math.max(1, Number(query.pageSize) || 12)
+  return { total: pool.length, rows: pool.slice((page - 1) * pageSize, page * pageSize) }
 }

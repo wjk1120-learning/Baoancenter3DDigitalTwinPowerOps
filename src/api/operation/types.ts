@@ -100,3 +100,49 @@ export interface CaoliaoRecord {
   fields: null
   defectInfo: DefectInfo
 }
+
+/** §4.3 DefectStats（缺陷处理状态统计）。
+ *  ⚠ 查询参数与契约 v5.2 原文不同：用户 2026-11-11 与后端约定由 deviceNumber 改为 buildingId（选填），
+ *  契约文档待后端更新；不传=统计全量缺陷表，传入=仅统计该楼栋下箱柜可归属的记录。 */
+export interface DefectStats {
+  /** 缺陷总数（范围内全部记录，含未知流程状态） */
+  total: number
+  /** 待处理数 */
+  pending: number
+  /** 处理中数 */
+  processing: number
+  /** 已完成数 */
+  done: number
+  /** 无需处理数 */
+  skipped: number
+}
+
+/** §4.5 箱柜缺陷联合查询参数（全部可选；riskLevel 精确匹配 一般缺陷/严重缺陷/重大缺陷；
+ *  startDate/endDate 按缺陷记录时间日期部分闭区间比较，可单传其一） */
+export interface CabinetDefectQuery {
+  riskLevel?: string
+  startDate?: string
+  endDate?: string
+  /** 楼栋 ID（等值过滤该楼栋箱柜；未关联楼栋的箱柜不命中——契约口径） */
+  buildingId?: number
+  page?: number
+  pageSize?: number
+}
+
+/** §4.5 CabinetDefectOverview（箱柜缺陷联合查询行；一行一个箱柜，行序同 §1.4） */
+export interface CabinetDefectOverview {
+  /** 楼栋名称（箱柜未关联楼栋为 null） */
+  buildingName: string | null
+  /** 设备编号（箱柜编号，如 BZ000021） */
+  deviceNumber: string
+  /** 箱柜名称 */
+  superName: string
+  /** 设备类型 */
+  deviceType: string
+  /** 有无缺陷（筛选条件下统计，true=有） */
+  hasDefect: boolean
+  /** 缺陷数量（筛选条件下命中条数） */
+  defectCount: number
+  /** 最近缺陷发现日期（匹配集合最新 foundDate，yyyy-MM-dd；无匹配为 null） */
+  latestDefectDate: string | null
+}

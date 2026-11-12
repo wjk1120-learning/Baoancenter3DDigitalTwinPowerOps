@@ -1,9 +1,9 @@
 /**
  * 设备接口（§1 设备管理模块，契约唯一依据 = docs/FY-Hospital-API.md）。
- * 当前范围：§1.3 配电房列表 / §1.4 箱柜分页 / §1.6 配电房下箱柜+单柜详情 /
- * §1.7 设备明细分页 / §1.8 设备精简列表 / §1.9 设备名搜索 / §1.10 柜名搜索 /
- * §1.11 测点 / §1.12 健康度五档。
- * 不做（用户拍板）：§1.2 楼栋、§1.5 箱柜计数、§1.13 平均值（4.5）、§1.14-1.16、§1.17 导出。
+ * 当前范围：§1.2 楼栋列表（缺陷管理页用）/ §1.3 配电房列表 / §1.4 箱柜分页 /
+ * §1.6 配电房下箱柜+单柜详情 / §1.7 设备明细分页 / §1.8 设备精简列表 / §1.9 设备名搜索 /
+ * §1.10 柜名搜索 / §1.11 测点 / §1.12 健康度五档。
+ * 不做（用户拍板）：§1.5 箱柜计数、§1.13 平均值（4.5）、§1.14-1.16、§1.17 导出。
  * 响应字段只认文档 camelCase，不做大小写/野字段兜底；目录数据页面初始化拉取，
  * 测点等明细由点击触发（按需请求规则）。
  */
@@ -11,6 +11,7 @@ import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import { KeyedMemoryCache } from '../../utils/cache'
 import type { RequestConfig } from '../../utils/http'
 import type {
+  BuildingInfo,
   DeviceBrief,
   DeviceDetail,
   DeviceHealthLevelStats,
@@ -27,6 +28,14 @@ const measCache = new KeyedMemoryCache<MeasInfo[]>(MEAS_CLIENT_TTL_MS)
 
 function conf(): RequestConfig {
   return { timeout: DATA_FETCH_TIMEOUT_MS, silent: true }
+}
+
+/** §1.2 楼栋列表（全量返回含 0 柜楼栋；缺陷管理页楼栋树/面包屑，进页一次） */
+export async function fetchBuildingList(): Promise<BuildingInfo[]> {
+  const data = await bzGet<BuildingInfo[] | null>('/device/buildings', undefined, conf())
+  return Array.isArray(data)
+    ? data.filter((b) => b && b.id && typeof b.buildingName === 'string')
+    : []
 }
 
 /** §1.4 箱柜列表（分页；buildingId 不传 = 全量；服务端排序：有开关优先→ID 升序） */

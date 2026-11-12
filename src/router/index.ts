@@ -11,6 +11,7 @@ const REAL_PAGES: Record<string, () => Promise<Component>> = {
   'power-room': () => import('../views/power-room/PowerRoomPage.vue'),
   alert: () => import('../views/alert-center/AlertCenterPage.vue'),
   device: () => import('../views/device-management/DeviceManagementPage.vue'),
+  defect: () => import('../views/defect-management/DefectManagementPage.vue'),
   monitor: () => import('../views/environment-monitor/EnvironmentMonitorPage.vue'),
 }
 

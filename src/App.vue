@@ -23,6 +23,7 @@ const keepAliveInclude = [
   'PowerRoomPage',
   'AlertCenterPage',
   'DeviceManagementPage',
+  'DefectManagementPage',
   'DeviceDetailPage',
   'EnvironmentMonitorPage',
 ]

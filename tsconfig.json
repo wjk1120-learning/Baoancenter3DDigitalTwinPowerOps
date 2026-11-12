@@ -8,9 +8,9 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "scripts/**/*.mjs", "tests/**/*.ts"],
   // naiveTheme.ts 是用户自福永搬来的 naive-ui 主题，等 naive-ui 装上后删掉此排除
-  "exclude": ["src/styles/naiveTheme.ts"]
+  "exclude": ["src/styles/naiveTheme.ts"],
 }
