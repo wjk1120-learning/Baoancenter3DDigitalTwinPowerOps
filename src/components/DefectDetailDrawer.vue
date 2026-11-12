@@ -40,7 +40,8 @@ const hasAnyImage = computed(() => {
     g.workImageUrls?.length ||
     g.beforeImageUrls?.length ||
     g.duringImageUrls?.length ||
-    g.afterImageUrls?.length
+    g.afterImageUrls?.length ||
+    g.hazardDeviceImage
   )
 })
 </script>
@@ -120,6 +121,12 @@ const hasAnyImage = computed(() => {
                 <NTag v-if="info?.riskLevel" size="small" :type="tagType(info.riskLevel)">{{ info.riskLevel }}</NTag>
                 <span v-else class="dd">--</span>
               </div>
+              <div class="desc-item">
+                <span class="dt">隐患配电柜/箱名称：</span><span class="dd">{{ dash(info?.hazardDeviceName) }}</span>
+              </div>
+              <div class="desc-item">
+                <span class="dt">隐患配电柜/箱编号：</span><span class="dd td-mono">{{ dash(info?.hazardDeviceNumber) }}</span>
+              </div>
               <div class="desc-item span2">
                 <span class="dt">隐患描述：</span><span class="dd">{{ dash(info?.hazardDescription) }}</span>
               </div>
@@ -167,6 +174,10 @@ const hasAnyImage = computed(() => {
           <h3 class="section-title">图片记录</h3>
           <div class="section-card">
             <template v-if="hasAnyImage">
+              <div v-if="info?.hazardDeviceImage" class="img-group">
+                <div class="img-group-title">隐患配电柜/箱原图</div>
+                <NImage class="img-item" :src="info.hazardDeviceImage" />
+              </div>
               <div v-if="info?.workImageUrls?.length" class="img-group">
                 <div class="img-group-title">作业图片</div>
                 <NImageGroup>
