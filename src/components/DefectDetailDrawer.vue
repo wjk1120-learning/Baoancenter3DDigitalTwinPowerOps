@@ -24,7 +24,9 @@ function dash(v: string | null | undefined): string {
 }
 
 /** 处理进度 / 风险等级 / 是否整改 → naive-ui tag 类型 */
-function tagType(v: string | null | undefined): 'success' | 'info' | 'warning' | 'error' | 'default' {
+function tagType(
+  v: string | null | undefined,
+): 'success' | 'info' | 'warning' | 'error' | 'default' {
   const s = String(v ?? '')
   if (s === '已完成' || s === '已整改') return 'success'
   if (s === '处理中') return 'info'
@@ -47,12 +49,7 @@ const hasAnyImage = computed(() => {
 </script>
 
 <template>
-  <NDrawer
-    :show="show"
-    :width="720"
-    placement="right"
-    @update:show="emit('update:show', $event)"
-  >
+  <NDrawer :show="show" :width="720" placement="right" @update:show="emit('update:show', $event)">
     <NDrawerContent :title="`缺陷详情 · ${record?.recordId ?? ''}`" closable>
       <div class="drawer-body">
         <!-- 表单详情 -->
@@ -61,22 +58,31 @@ const hasAnyImage = computed(() => {
           <div class="section-card">
             <div class="desc-list">
               <div class="desc-item span2">
-                <span class="dt">表单名称：</span><span class="dd">{{ dash(record?.formName) }}</span>
+                <span class="dt">表单名称：</span
+                ><span class="dd">{{ dash(record?.formName) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">记录编号：</span><span class="dd td-mono">{{ dash(record?.recordId) }}</span>
+                <span class="dt">记录编号：</span
+                ><span class="dd td-mono">{{ dash(record?.recordId) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">表单编号：</span><span class="dd td-mono">{{ dash(record?.formNumber) }}</span>
+                <span class="dt">表单编号：</span
+                ><span class="dd td-mono">{{ dash(record?.formNumber) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">二维码名称：</span><span class="dd">{{ dash(record?.position) }}</span>
+                <span class="dt">二维码名称：</span
+                ><span class="dd">{{ dash(record?.position) }}</span>
               </div>
               <div class="desc-item span2">
                 <span class="dt">二维码链接：</span>
-                <a v-if="record?.webUrl" class="dd link" :href="record.webUrl" target="_blank" rel="noopener">{{
-                  record.webUrl
-                }}</a>
+                <a
+                  v-if="record?.webUrl"
+                  class="dd link"
+                  :href="record.webUrl"
+                  target="_blank"
+                  rel="noopener"
+                  >{{ record.webUrl }}</a
+                >
                 <span v-else class="dd">--</span>
               </div>
             </div>
@@ -89,19 +95,26 @@ const hasAnyImage = computed(() => {
           <div class="section-card">
             <div class="desc-list">
               <div class="desc-item">
-                <span class="dt">提交人：</span><span class="dd">{{ dash(record?.inspector || info?.reporterName) }}</span>
+                <span class="dt">提交人：</span
+                ><span class="dd">{{ dash(record?.inspector || info?.reporterName) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">发现时间：</span><span class="dd td-mono">{{ dash(record?.recordTime) }}</span>
+                <span class="dt">发现时间：</span
+                ><span class="dd td-mono">{{ dash(record?.recordTime) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">最近流转时间：</span><span class="dd td-mono">{{ dash(info?.processTime) }}</span>
+                <span class="dt">最近流转时间：</span
+                ><span class="dd td-mono">{{ dash(info?.processTime) }}</span>
               </div>
               <div class="desc-item">
                 <span class="dt">处理进度：</span>
-                <NTag v-if="record?.processState" round size="small" :type="tagType(record.processState)">{{
-                  record.processState
-                }}</NTag>
+                <NTag
+                  v-if="record?.processState"
+                  round
+                  size="small"
+                  :type="tagType(record.processState)"
+                  >{{ record.processState }}</NTag
+                >
                 <span v-else class="dd">--</span>
               </div>
             </div>
@@ -114,21 +127,27 @@ const hasAnyImage = computed(() => {
           <div class="section-card">
             <div class="desc-list">
               <div class="desc-item">
-                <span class="dt">隐患位置：</span><span class="dd">{{ dash(info?.hazardPosition) }}</span>
+                <span class="dt">隐患位置：</span
+                ><span class="dd">{{ dash(info?.hazardPosition) }}</span>
               </div>
               <div class="desc-item">
                 <span class="dt">风险等级：</span>
-                <NTag v-if="info?.riskLevel" size="small" :type="tagType(info.riskLevel)">{{ info.riskLevel }}</NTag>
+                <NTag v-if="info?.riskLevel" size="small" :type="tagType(info.riskLevel)">{{
+                  info.riskLevel
+                }}</NTag>
                 <span v-else class="dd">--</span>
               </div>
               <div class="desc-item">
-                <span class="dt">隐患配电柜/箱名称：</span><span class="dd">{{ dash(info?.hazardDeviceName) }}</span>
+                <span class="dt">隐患配电柜/箱名称：</span
+                ><span class="dd">{{ dash(info?.hazardDeviceName) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">隐患配电柜/箱编号：</span><span class="dd td-mono">{{ dash(info?.hazardDeviceNumber) }}</span>
+                <span class="dt">隐患配电柜/箱编号：</span
+                ><span class="dd td-mono">{{ dash(info?.hazardDeviceNumber) }}</span>
               </div>
               <div class="desc-item span2">
-                <span class="dt">隐患描述：</span><span class="dd">{{ dash(info?.hazardDescription) }}</span>
+                <span class="dt">隐患描述：</span
+                ><span class="dd">{{ dash(info?.hazardDescription) }}</span>
               </div>
             </div>
           </div>
@@ -141,26 +160,34 @@ const hasAnyImage = computed(() => {
             <div class="desc-list">
               <div class="desc-item">
                 <span class="dt">是否整改：</span>
-                <NTag v-if="info?.rectified" size="small" :type="tagType(info.rectified)">{{ info.rectified }}</NTag>
+                <NTag v-if="info?.rectified" size="small" :type="tagType(info.rectified)">{{
+                  info.rectified
+                }}</NTag>
                 <span v-else class="dd">--</span>
               </div>
               <div class="desc-item">
-                <span class="dt">发现日期：</span><span class="dd td-mono">{{ dash(info?.foundDate) }}</span>
+                <span class="dt">发现日期：</span
+                ><span class="dd td-mono">{{ dash(info?.foundDate) }}</span>
               </div>
               <div class="desc-item span2">
-                <span class="dt">整改措施：</span><span class="dd">{{ dash(info?.rectifyMeasure) }}</span>
+                <span class="dt">整改措施：</span
+                ><span class="dd">{{ dash(info?.rectifyMeasure) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">整改期限：</span><span class="dd td-mono">{{ dash(info?.deadline) }}</span>
+                <span class="dt">整改期限：</span
+                ><span class="dd td-mono">{{ dash(info?.deadline) }}</span>
               </div>
               <div class="desc-item">
-                <span class="dt">整改科室及责任人：</span><span class="dd">{{ dash(info?.responsibleDept) }}</span>
+                <span class="dt">整改科室及责任人：</span
+                ><span class="dd">{{ dash(info?.responsibleDept) }}</span>
               </div>
               <div class="desc-item span2">
-                <span class="dt">建议整改措施：</span><span class="dd">{{ dash(info?.suggestedMeasure) }}</span>
+                <span class="dt">建议整改措施：</span
+                ><span class="dd">{{ dash(info?.suggestedMeasure) }}</span>
               </div>
               <div class="desc-item span2">
-                <span class="dt">不符合标准条款：</span><span class="dd">{{ dash(info?.standardClause) }}</span>
+                <span class="dt">不符合标准条款：</span
+                ><span class="dd">{{ dash(info?.standardClause) }}</span>
               </div>
               <div class="desc-item span2">
                 <span class="dt">备注：</span><span class="dd">{{ dash(info?.remark) }}</span>
@@ -178,19 +205,16 @@ const hasAnyImage = computed(() => {
                 <div class="img-group-title">隐患配电柜/箱原图</div>
                 <NImage class="img-item" :src="info.hazardDeviceImage" />
               </div>
-              <div v-if="info?.workImageUrls?.length" class="img-group">
-                <div class="img-group-title">作业图片</div>
-                <NImageGroup>
-                  <div class="img-row">
-                    <NImage v-for="(u, i) in info.workImageUrls" :key="i" class="img-item" :src="u" />
-                  </div>
-                </NImageGroup>
-              </div>
               <div v-if="info?.beforeImageUrls?.length" class="img-group">
                 <div class="img-group-title">整改前</div>
                 <NImageGroup>
                   <div class="img-row">
-                    <NImage v-for="(u, i) in info.beforeImageUrls" :key="i" class="img-item" :src="u" />
+                    <NImage
+                      v-for="(u, i) in info.beforeImageUrls"
+                      :key="i"
+                      class="img-item"
+                      :src="u"
+                    />
                   </div>
                 </NImageGroup>
               </div>
@@ -198,7 +222,12 @@ const hasAnyImage = computed(() => {
                 <div class="img-group-title">整改中</div>
                 <NImageGroup>
                   <div class="img-row">
-                    <NImage v-for="(u, i) in info.duringImageUrls" :key="i" class="img-item" :src="u" />
+                    <NImage
+                      v-for="(u, i) in info.duringImageUrls"
+                      :key="i"
+                      class="img-item"
+                      :src="u"
+                    />
                   </div>
                 </NImageGroup>
               </div>
@@ -206,7 +235,25 @@ const hasAnyImage = computed(() => {
                 <div class="img-group-title">整改后</div>
                 <NImageGroup>
                   <div class="img-row">
-                    <NImage v-for="(u, i) in info.afterImageUrls" :key="i" class="img-item" :src="u" />
+                    <NImage
+                      v-for="(u, i) in info.afterImageUrls"
+                      :key="i"
+                      class="img-item"
+                      :src="u"
+                    />
+                  </div>
+                </NImageGroup>
+              </div>
+              <div v-if="info?.workImageUrls?.length" class="img-group">
+                <div class="img-group-title">作业图片</div>
+                <NImageGroup>
+                  <div class="img-row">
+                    <NImage
+                      v-for="(u, i) in info.workImageUrls"
+                      :key="i"
+                      class="img-item"
+                      :src="u"
+                    />
                   </div>
                 </NImageGroup>
               </div>

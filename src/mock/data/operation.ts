@@ -29,6 +29,7 @@ const IMG_IR = img('红外测温图')
 const IMG_CURRENT = img('最热点电流图')
 const IMG_BEFORE = img('整改前')
 const IMG_AFTER = img('整改后')
+const IMG_WORK = img('作业图片')
 
 // ---- §4.1 巡检记录（BZ000021 三条：两条本月、一条上月；BZ000022 一条异常） ----
 export const inspectionRecords: InspectDeviceRecord[] = [
@@ -107,7 +108,7 @@ export const defectRecords: CaoliaoRecord[] = [
       beforeImageUrls: [IMG_BEFORE],
       duringImageUrls: null,
       afterImageUrls: [IMG_AFTER],
-      workImageUrls: null,
+      workImageUrls: [IMG_WORK],
       processTime: '2026-11-02 09:30:00',
       hazardDeviceName: '1#变 P01/T1 进线柜',
       hazardDeviceNumber: 'BZ000021',
