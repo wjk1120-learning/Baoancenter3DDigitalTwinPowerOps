@@ -45,9 +45,7 @@ export async function fetchDefectRecordsByDeviceNumber(
   return Array.isArray(data) ? data.filter((r) => r && r.recordId) : []
 }
 
-/** §4.3 缺陷处理状态统计（buildingId 不传 = 全量）。
- *  ⚠ 参数与契约 v5.2 原文不同：用户 2026-11-11 与后端约定由 deviceNumber 改 buildingId，契约待后端更新；
- *  切真前需后端先改，否则真后端会忽略该参数恒返全量。 */
+/** §4.3 缺陷处理状态统计（buildingId 不传 = 全量；该口径已随契约 v5.4.2 落地，原 deviceNumber 已废） */
 export async function fetchDefectStats(buildingId?: number): Promise<DefectStats | null> {
   const data = await bzGet<DefectStats | null>(
     '/operation/defect-records/stats',
@@ -57,8 +55,8 @@ export async function fetchDefectStats(buildingId?: number): Promise<DefectStats
   return data && typeof data === 'object' ? data : null
 }
 
-/** §4.5 箱柜缺陷联合查询（分页单页；行序同 §1.4 有开关优先→ID 升序；
- *  传任一筛选（riskLevel/startDate/endDate）后仅返回存在匹配缺陷记录的箱柜） */
+/** §4.5 箱柜缺陷联合查询（分页单页；v5.4.2 行序 = 缺陷数量降序，同数量保持台账序；
+ *  传任一筛选（riskLevel/startDate/endDate/processState）后仅返回存在匹配缺陷记录的箱柜） */
 export async function fetchCabinetDefectPage(
   query: CabinetDefectQuery,
 ): Promise<{ total: number; rows: CabinetDefectOverview[] }> {
@@ -69,6 +67,7 @@ export async function fetchCabinetDefectPage(
   if (query.riskLevel) params.riskLevel = query.riskLevel
   if (query.startDate) params.startDate = query.startDate
   if (query.endDate) params.endDate = query.endDate
+  if (query.processState) params.processState = query.processState
   if (query.buildingId != null) params.buildingId = query.buildingId
   const data = await bzGet<{ total: number; rows: CabinetDefectOverview[] } | null>(
     '/operation/cabinet-defects',

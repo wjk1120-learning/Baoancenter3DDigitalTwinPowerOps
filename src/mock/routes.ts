@@ -181,7 +181,7 @@ const routes: MockRoute[] = [
   route('GET /operation/defect-records', ({ query }) =>
     getDefectByDeviceNumber(query.deviceNumber ?? ''),
   ),
-  // §4.3 缺陷处理状态统计（⚠ buildingId 参数=用户 2026-11-11 与后端新约定，契约 v5.2 仍为 deviceNumber 待后端改）
+  // §4.3 缺陷处理状态统计（buildingId 口径已随契约 v5.4.2 落地）
   route('GET /operation/defect-records/stats', ({ query }) => getDefectStats(query)),
   // §4.5 箱柜缺陷联合查询（分页；行序同 §1.4；传任一筛选后仅返回有匹配缺陷的箱柜）
   route('GET /operation/cabinet-defects', ({ query }) => getCabinetDefects(query)),

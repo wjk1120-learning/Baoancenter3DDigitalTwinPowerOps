@@ -20,6 +20,8 @@ export interface InspectDeviceRecord {
   currentImage: string | null
   /** 直流电压（UPS 电池组，V；无则 null） */
   dcVoltage: number | null
+  /** 直流电压原图（UPS"直流电压"分组；无则 null；v5.4.2 新增字段） */
+  dcVoltageImage: string | null
   /** 巡检人名称（无则 null） */
   inspector: string | null
   /** 巡检结果（草料顶层结果内容，如 正常；无则 null） */
@@ -101,9 +103,9 @@ export interface CaoliaoRecord {
   defectInfo: DefectInfo
 }
 
-/** §4.3 DefectStats（缺陷处理状态统计）。
- *  ⚠ 查询参数与契约 v5.2 原文不同：用户 2026-11-11 与后端约定由 deviceNumber 改为 buildingId（选填），
- *  契约文档待后端更新；不传=统计全量缺陷表，传入=仅统计该楼栋下箱柜可归属的记录。 */
+/** §4.3 DefectStats（缺陷处理状态统计；buildingId 选填口径已随契约 v5.4.2 落地，
+ *  原 deviceNumber 参数已废：不传=统计全量缺陷表，传入=经箱柜台账圈定该楼栋编号集合，
+ *  仅统计「隐患配电柜/箱编号」命中的记录） */
 export interface DefectStats {
   /** 缺陷总数（范围内全部记录，含未知流程状态） */
   total: number
@@ -118,11 +120,14 @@ export interface DefectStats {
 }
 
 /** §4.5 箱柜缺陷联合查询参数（全部可选；riskLevel 精确匹配 一般缺陷/严重缺陷/重大缺陷；
- *  startDate/endDate 按缺陷记录时间日期部分闭区间比较，可单传其一） */
+ *  startDate/endDate 按缺陷记录时间日期部分闭区间比较，可单传其一；
+ *  v5.4.2 行序 = 缺陷数量降序，同数量保持台账序） */
 export interface CabinetDefectQuery {
   riskLevel?: string
   startDate?: string
   endDate?: string
+  /** 缺陷处理状态精确匹配（待处理/处理中/已完成/无需处理；v5.4.2 新增参数） */
+  processState?: string
   /** 楼栋 ID（等值过滤该楼栋箱柜；未关联楼栋的箱柜不命中——契约口径） */
   buildingId?: number
   page?: number

@@ -43,6 +43,7 @@ export const inspectionRecords: InspectDeviceRecord[] = [
     detectCurrent: 76,
     currentImage: IMG_CURRENT,
     dcVoltage: null,
+    dcVoltageImage: null,
     inspector: '张伟',
     inspectResult: '正常',
     createdAt: '2026-11-03 09:40:00',
@@ -57,6 +58,7 @@ export const inspectionRecords: InspectDeviceRecord[] = [
     detectCurrent: null,
     currentImage: null,
     dcVoltage: null,
+    dcVoltageImage: null,
     inspector: '李娜',
     inspectResult: '正常',
     createdAt: '2026-10-20 15:05:00',
@@ -71,6 +73,7 @@ export const inspectionRecords: InspectDeviceRecord[] = [
     detectCurrent: 92,
     currentImage: IMG_CURRENT,
     dcVoltage: null,
+    dcVoltageImage: null,
     inspector: '王强',
     inspectResult: '异常',
     createdAt: '2026-10-08 10:12:00',
@@ -210,9 +213,9 @@ function buildingIdOfDevice(num: string): number | null {
   return cabinets.find((c) => c.deviceNumber === num)?.buildingId ?? null
 }
 
-/** §4.3 缺陷处理状态统计。
- *  ⚠ 参数与契约 v5.2 原文不同：buildingId 选填 = 用户 2026-11-11 与后端新约定（原文 deviceNumber，后端待改）；
- *  不传统计全量，传入仅统计可归属该楼栋箱柜的记录（新表单按编号匹配，与 §4.2 同口径）。 */
+/** §4.3 缺陷处理状态统计（buildingId 选填；不传统计全量，传入经箱柜台账圈定该楼栋编号集合，
+ *  仅统计「隐患配电柜/箱编号」命中的记录；旧表单无编号记录不计入）。
+ *  buildingId 口径 v5.4.2 契约已落地（原 deviceNumber 参数已废）。 */
 export function getDefectStats(query: { buildingId?: string }): DefectStats {
   const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
   const pool = defectRecords.filter((r) => {
@@ -240,14 +243,16 @@ function latestFoundDate(records: CaoliaoRecord[]): string | null {
   return latest
 }
 
-/** §4.5 箱柜缺陷联合查询（分页；一行一箱柜；行序同 §1.4 有开关优先→id 升序）。
+/** §4.5 箱柜缺陷联合查询（分页；一行一箱柜；v5.4.2 行序 = 缺陷数量降序，同数量保持台账序）。
  *  筛选语义照契约：不传任何条件返回全部箱柜（hasDefect 0/1 混合）；传任一条件（riskLevel/
- *  startDate/endDate）后仅返回存在匹配缺陷记录的箱柜，defectCount/latestDefectDate 按匹配后
- *  集合统计；时间按记录时间日期部分闭区间可单边；buildingId 只缩柜范围不改筛选语义。 */
+ *  startDate/endDate/processState）后仅返回存在匹配缺陷记录的箱柜，defectCount/latestDefectDate
+ *  按匹配后集合统计；时间按记录时间日期部分闭区间可单边；处理状态为记录级精确匹配；
+ *  buildingId 只缩柜范围不改筛选语义。 */
 export function getCabinetDefects(query: {
   riskLevel?: string
   startDate?: string
   endDate?: string
+  processState?: string
   buildingId?: string
   page?: string
   pageSize?: string
@@ -255,13 +260,15 @@ export function getCabinetDefects(query: {
   const risk = (query.riskLevel ?? '').trim()
   const start = (query.startDate ?? '').trim()
   const end = (query.endDate ?? '').trim()
+  const state = (query.processState ?? '').trim()
   const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : null
-  const hasFilter = Boolean(risk || start || end)
+  const hasFilter = Boolean(risk || start || end || state)
 
   const matchedFor = (deviceNumber: string) =>
     defectRecords.filter((r) => {
       if (r.defectInfo.hazardDeviceNumber !== deviceNumber) return false
       if (risk && r.defectInfo.riskLevel !== risk) return false
+      if (state && r.processState !== state) return false
       const day = r.recordTime.slice(0, 10)
       if (start && day < start) return false
       if (end && day > end) return false
@@ -284,6 +291,7 @@ export function getCabinetDefects(query: {
       }
     })
     .filter((row) => (hasFilter ? row.defectCount > 0 : true))
+    .sort((a, b) => b.defectCount - a.defectCount) // 稳定排序：同数量保持上面的台账序（契约行序）
 
   const page = Math.max(1, Number(query.page) || 1)
   const pageSize = Math.max(1, Number(query.pageSize) || 12)
