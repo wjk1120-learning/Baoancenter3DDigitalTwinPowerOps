@@ -212,6 +212,14 @@ const MEAS_TEMPLATE: Record<string, { name: string; type: number; base: number }
     { name: 'C相电压', type: 0, base: 222 },
     { name: 'A相电流', type: 0, base: 86 },
     { name: '有功功率', type: 0, base: 48 },
+    // ↓ 与 §5.33 字典 typeName 同体系（4.2④ 测点抽屉按名称匹配实时值）
+    { name: 'B相电流', type: 0, base: 84 },
+    { name: 'C相电流', type: 0, base: 85 },
+    { name: 'A相有功功率', type: 0, base: 28 },
+    { name: 'B相有功功率', type: 0, base: 27 },
+    { name: 'C相有功功率', type: 0, base: 26 },
+    { name: '功率因数', type: 0, base: 0.93 },
+    { name: '总有功电能', type: 0, base: 34236.5 },
   ],
   电容柜: [
     { name: '功率因数', type: 0, base: 0.93 },

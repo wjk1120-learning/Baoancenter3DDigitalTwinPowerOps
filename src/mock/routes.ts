@@ -9,7 +9,8 @@ import {
   getMockPlaybackUrl,
   updateMockCamera,
 } from './data/ezviz'
-import { getDeviceDailyStats } from './data/energy'
+import { getDeviceDailyStats, getParamCurve } from './data/energy'
+import { getCetDataTypes } from './data/configuration'
 import {
   getCabinetDefects,
   getDefectByDeviceNumber,
@@ -173,6 +174,10 @@ const routes: MockRoute[] = [
   route('GET /energy/devices/:deviceId/daily-stats', ({ params }) =>
     getDeviceDailyStats(Number(params.deviceId)),
   ),
+  // §2.9 设备电能参数曲线（period=today/7d/30d；dataIDs=CET DataID 逗号串，缺省=全部；4.2④ 测点抽屉用）
+  route('GET /energy/devices/:deviceId/param-curve', ({ params, query }) =>
+    getParamCurve(Number(params.deviceId), String(query.period ?? 'today'), query.dataIDs),
+  ),
   // §4.1 按箱柜编号查询巡检记录
   route('GET /operation/inspection-records', ({ query }) =>
     getInspectionByDeviceNumber(query.deviceNumber ?? ''),
@@ -204,6 +209,9 @@ const routes: MockRoute[] = [
     updateMockCamera(Number(params.id), body ?? {}),
   ),
   route('POST /ezviz/cameras/:id/delete', ({ params }) => deleteMockCamera(Number(params.id))),
+
+  // ── 配置中心（§5.33 数据类型字典：4.2④ 测点抽屉曲线参数列表用）──
+  route('GET /configuration/data-types', () => getCetDataTypes()),
 ]
 
 /** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */

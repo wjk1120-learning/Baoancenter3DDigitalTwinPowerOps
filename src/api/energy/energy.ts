@@ -4,7 +4,7 @@
  */
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import type { RequestConfig } from '../../utils/http'
-import type { DeviceDailyEnergy } from './types'
+import type { DeviceDailyEnergy, ParamCurve } from './types'
 
 /** §2.4 按设备查询近 30 天每日能耗（无读数日 energyKwh/carbonKg 为 null） */
 export async function fetchDeviceDailyEnergy(deviceId: number): Promise<DeviceDailyEnergy[]> {
@@ -22,4 +22,23 @@ export async function fetchDeviceDailyEnergy(deviceId: number): Promise<DeviceDa
       energyKwh: r.energyKwh == null ? null : Number(r.energyKwh),
       carbonKg: r.carbonKg == null ? null : Number(r.carbonKg),
     }))
+}
+
+/** §2.9 筛选周期 */
+export type ParamCurvePeriod = 'today' | '7d' | '30d'
+
+/** §2.9 设备电能参数曲线（period=today/7d/30d；dataIDs=CET DataID 逗号串，缺省=字典全部） */
+export async function fetchDeviceParamCurve(
+  deviceId: number,
+  period: ParamCurvePeriod,
+  dataIDs?: string,
+): Promise<ParamCurve | null> {
+  if (!deviceId) return null
+  const data = await bzGet<ParamCurve | null>(
+    `/energy/devices/${deviceId}/param-curve`,
+    { period, ...(dataIDs ? { dataIDs } : {}) },
+    { timeout: DATA_FETCH_TIMEOUT_MS, silent: true } satisfies RequestConfig,
+  )
+  if (!data || !Array.isArray(data.resultList)) return null
+  return data
 }

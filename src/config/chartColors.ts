@@ -14,12 +14,18 @@ export const chartColors = {
   borderStrong: rootVar('--border-strong', '#B9CEE9'),
   primary50: rootVar('--primary-50', '#EAF3FB'),
   teal: rootVar('--teal', '#17A2B8'),
+  auxBlue: rootVar('--aux-blue', '#5AA1F5'),
   warn: rootVar('--warn', '#F5A623'),
   danger: rootVar('--danger', '#E5484D'),
 }
 
-/** 把 getComputedStyle 返回的 rgb() 色值转成带透明度的 rgba */
+/** 把令牌色值（#hex 或 rgb()）转成带透明度的 rgba；getComputedStyle 对自定义属性可能回 hex 原文 */
 export function withAlpha(color: string, alpha: number): string {
+  const hex = color.match(/^#([0-9a-f]{6})$/i)
+  if (hex) {
+    const n = parseInt(hex[1]!, 16)
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+  }
   const m = color.match(/\d+(\.\d+)?/g)
   if (!m || m.length < 3) return color
   return `rgba(${m[0]}, ${m[1]}, ${m[2]}, ${alpha})`

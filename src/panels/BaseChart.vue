@@ -3,6 +3,7 @@ import * as echarts from 'echarts/core'
 import { BarChart, GaugeChart, LineChart, PieChart } from 'echarts/charts'
 import {
   AxisPointerComponent,
+  DataZoomComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -18,6 +19,7 @@ echarts.use([
   LineChart,
   PieChart,
   AxisPointerComponent,
+  DataZoomComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -27,6 +29,9 @@ echarts.use([
 
 const props = defineProps<{ option: echarts.EChartsCoreOption }>()
 
+/** 透出 dataZoom 事件（拖动缩放条/框选时触发），供页面更新联动 UI；不关心可忽略 */
+const emit = defineEmits<{ datazoom: [params: unknown] }>()
+
 const el = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let ro: ResizeObserver | null = null
@@ -35,6 +40,7 @@ onMounted(() => {
   if (!el.value) return
   chart = echarts.init(el.value)
   chart.setOption(props.option)
+  chart.on('datazoom', (params) => emit('datazoom', params))
   ro = new ResizeObserver(() => chart?.resize())
   ro.observe(el.value)
 })

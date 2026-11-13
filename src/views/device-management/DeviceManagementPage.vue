@@ -24,7 +24,7 @@ import ChannelSidebar from '../../components/ChannelSidebar.vue'
 import CabinetTable from './components/CabinetTable.vue'
 import HealthAside from '../../components/HealthAside.vue'
 import PointListDialog from './components/PointListDialog.vue'
-import PointAlarmDrawer from './components/PointAlarmDrawer.vue'
+import PointCurveDrawer from './components/PointCurveDrawer.vue'
 
 /**
  * 设备管理（4.2，福永 DeviceManagementPage 同构；目录解耦批次 2 起不再走全局 store）：
@@ -355,7 +355,7 @@ function enterDevice3D(cabinet: SuperDevice) {
       @close="pointsCabinet = null"
       @view-alarms="(d) => (alarmDevice = d)"
     />
-    <PointAlarmDrawer :device="alarmDevice" @close="alarmDevice = null" />
+    <PointCurveDrawer :device="alarmDevice" @close="alarmDevice = null" />
   </div>
 </template>
 

@@ -29,6 +29,8 @@
   --teal: #17a2b8;
   --cyan-light: #4cd0e8;
   --cyan-deep: #0e7a8e;
+  /* 辅助对比序列（DESIGN.md §5 分类序列第 6 色，测点曲线第 3 序列用） */
+  --aux-blue: #5aa1f5;
 
   /* 能源绿（仅能源/节能语义，绝不用于设备正常状态） */
   --energy: #2fa36b;
