@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { fetchHealthAverage } from '../../api/device/device'
 import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
 import HealthPanel from '../../panels/HealthPanel.vue'
+import TransformerPanel from '../../panels/TransformerPanel.vue'
 
 defineOptions({ name: 'HospitalOverviewPage' })
 
@@ -91,7 +92,9 @@ const ICONS = {
           </span>
           <h3 class="card-title">主要设备监测</h3>
         </div>
-        <div class="panel-body body-placeholder">建设中</div>
+        <div class="panel-body">
+          <TransformerPanel />
+        </div>
       </section>
     </aside>
 
