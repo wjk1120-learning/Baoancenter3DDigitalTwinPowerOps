@@ -8,7 +8,7 @@
 import { bzGet, bzPost, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import { KeyedMemoryCache, MemoryCache } from '../../utils/cache'
 import { runWithConcurrency } from '../../utils/concurrency'
-import type { AlertEventLevel } from '../hospital/types'
+import type { AlertEventLevel, AlertItem } from '../hospital/types'
 import type {
   DeviceEventGroup,
   EventBrief,
@@ -19,7 +19,13 @@ import type {
   PageResult,
   SuperDeviceAlarmStats,
 } from './types'
-import { briefToEventInfo, coerceEventBrief, coerceEventInfo, normalizeEventLevel } from './mappers'
+import {
+  briefToEventInfo,
+  coerceEventBrief,
+  coerceEventInfo,
+  mapEventInfoToAlert,
+  normalizeEventLevel,
+} from './mappers'
 
 const EVENT_CACHE_TTL_MS = 15_000
 
@@ -34,17 +40,33 @@ async function eventGet<T>(path: string): Promise<T> {
   return bzGet<T>(path, undefined, { timeout: DATA_FETCH_TIMEOUT_MS, silent: true })
 }
 
-/** 3.1 今日告警分页（GET /event/today?page&pageSize） */
+/** 3.1 今日告警（v5.9.2 起契约取消分页：List<EventBrief> 直返，page/pageSize 参数废弃忽略；
+ *  返回形状保持 {total, rows} 以不破坏既有调用方（今日等级分布派生）） */
 export async function fetchTodayEvents(page = 1, pageSize = 50): Promise<PageResult<EventInfo>> {
-  const data = await eventGet<PageResult<unknown>>(`/event/today?page=${page}&pageSize=${pageSize}`)
-  const rows = (data?.rows ?? [])
+  void page
+  void pageSize
+  const data = await eventGet<EventBrief[] | null>('/event/today')
+  const rows = (Array.isArray(data) ? data : [])
     .map((raw) => {
       const brief = coerceEventBrief(raw)
       if (brief) return briefToEventInfo(brief)
       return coerceEventInfo(raw)
     })
     .filter((e): e is EventInfo => e != null)
-  return { total: Number(data?.total) || rows.length, rows }
+  return { total: rows.length, rows }
+}
+
+/** 3.1 今日告警全量 → AlertItem[]（医院总览告警面板专用：WS 断线重连/单条推送后的
+ *  全量对齐数据源；v5.9.2 起契约取消分页，List<EventBrief> 直返按时间倒序） */
+export async function fetchTodayAlerts(): Promise<AlertItem[]> {
+  const data = await eventGet<EventBrief[] | null>('/event/today')
+  const items: AlertItem[] = []
+  for (const raw of Array.isArray(data) ? data : []) {
+    const brief = coerceEventBrief(raw)
+    const info = brief ? briefToEventInfo(brief) : coerceEventInfo(raw)
+    if (info) items.push(mapEventInfoToAlert(info))
+  }
+  return items
 }
 
 function groupedCacheKey(level?: number): string {

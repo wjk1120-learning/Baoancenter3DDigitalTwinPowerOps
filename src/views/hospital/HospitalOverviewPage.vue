@@ -3,6 +3,7 @@ import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchHealthAverage } from '../../api/device/device'
 import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
+import AlertPanel from '../../panels/AlertPanel.vue'
 import HealthPanel from '../../panels/HealthPanel.vue'
 import TransformerPanel from '../../panels/TransformerPanel.vue'
 
@@ -124,7 +125,9 @@ const ICONS = {
           </span>
           <h3 class="card-title">告警信息</h3>
         </div>
-        <div class="panel-body body-placeholder">建设中</div>
+        <div class="panel-body">
+          <AlertPanel />
+        </div>
       </section>
     </aside>
 

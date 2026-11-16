@@ -61,23 +61,13 @@ function route(key: string, handler: (ctx: MockCallContext) => unknown): MockRou
   return { method, segments: path.split('/').filter(Boolean), handler }
 }
 
-function toInt(v: string | undefined, fallback: number): number {
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
-}
-
 /**
  * mock 路由表：'方法 路径' → 处理函数。路径段支持 :参数。
  * 未登记的接口 = 页面拿到空信封（见 mockAdapter），缺口随阶段 4 页面逐个补。
  */
 const routes: MockRoute[] = [
-  // 3.1 今日告警分页（GET /event/today?page&pageSize，按时间倒序）
-  route('GET /event/today', ({ query }) => {
-    const page = toInt(query.page, 1)
-    const pageSize = toInt(query.pageSize, 2000)
-    const rows = [...eventRows].sort((a, b) => b.timeStr.localeCompare(a.timeStr))
-    return { total: rows.length, rows: rows.slice((page - 1) * pageSize, page * pageSize) }
-  }),
+  // §3.1 今日告警（v5.9.2 起契约取消分页：List<EventBrief> 直返，按时间倒序）
+  route('GET /event/today', () => [...eventRows].sort((a, b) => b.timeStr.localeCompare(a.timeStr))),
 
   // 3.2 按设备聚合（?level= 过滤，缺省全量；组内 events 即 EventBrief 列表）
   route('GET /event/grouped', ({ query }) => {
