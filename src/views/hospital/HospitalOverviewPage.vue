@@ -2,6 +2,7 @@
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchHealthAverage } from '../../api/device/device'
+import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
 import HealthPanel from '../../panels/HealthPanel.vue'
 
 defineOptions({ name: 'HospitalOverviewPage' })
@@ -76,7 +77,9 @@ const ICONS = {
           </span>
           <h3 class="card-title">能源运营总览</h3>
         </div>
-        <div class="panel-body body-placeholder">建设中</div>
+        <div class="panel-body">
+          <EnergyOverviewPanel />
+        </div>
       </section>
 
       <section class="panel-block glass-card" :style="{ flex: 1.6 }">

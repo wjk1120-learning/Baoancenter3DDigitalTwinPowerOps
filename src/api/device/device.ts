@@ -1,8 +1,9 @@
 /**
  * 设备接口（§1 设备管理模块，契约唯一依据 = docs/FY-Hospital-API.md）。
- * 当前范围：§1.2 楼栋列表（缺陷管理页用）/ §1.3 配电房列表 / §1.4 箱柜分页 /
- * §1.6 配电房下箱柜+单柜详情 / §1.7 设备明细分页 / §1.8 设备精简列表 / §1.9 设备名搜索 /
- * §1.10 柜名搜索 / §1.11 测点 / §1.12 健康度五档 / §1.13 全院健康度平均值（医院总览页用）。
+ * 当前范围：§1.1 总设备数（医院总览页用）/ §1.2 楼栋列表（缺陷管理页用）/ §1.3 配电房列表 /
+ * §1.4 箱柜分页 / §1.6 配电房下箱柜+单柜详情 / §1.7 设备明细分页 / §1.8 设备精简列表 /
+ * §1.9 设备名搜索 / §1.10 柜名搜索 / §1.11 测点 / §1.12 健康度五档 /
+ * §1.13 全院健康度平均值（医院总览页用）。
  * 不做（用户拍板）：§1.5 箱柜计数、§1.14-1.16、§1.17 导出。
  * 响应字段只认文档 camelCase，不做大小写/野字段兜底；目录数据页面初始化拉取，
  * 测点等明细由点击触发（按需请求规则）。
@@ -28,6 +29,12 @@ const measCache = new KeyedMemoryCache<MeasInfo[]>(MEAS_CLIENT_TTL_MS)
 
 function conf(): RequestConfig {
   return { timeout: DATA_FETCH_TIMEOUT_MS, silent: true }
+}
+
+/** §1.1 查询总设备数（医院总览页能源面板 KPI） */
+export async function fetchDeviceCount(): Promise<number | null> {
+  const data = await bzGet<number | null>('/device/count', undefined, conf())
+  return typeof data === 'number' && Number.isFinite(data) ? data : null
 }
 
 /** §1.2 楼栋列表（全量返回含 0 柜楼栋；缺陷管理页楼栋树/面包屑，进页一次） */

@@ -303,6 +303,11 @@ export function getHealthAverage(): number {
   return Math.round(avg * 100) / 100
 }
 
+/** §1.1 查询总设备数（测点设备总数 = devices 长度；医院总览能源面板 KPI） */
+export function getDeviceCount(): number {
+  return devices.length
+}
+
 /** mock 自洽性对账：告警数据的设备名是否都在目录中（测试断言用） */
 export function eventNamesMissingInCatalog(): string[] {
   const names = new Set(cabinets.map((c) => c.superName))

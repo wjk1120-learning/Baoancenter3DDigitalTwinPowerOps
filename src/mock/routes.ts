@@ -9,7 +9,12 @@ import {
   getMockPlaybackUrl,
   updateMockCamera,
 } from './data/ezviz'
-import { getDeviceDailyStats, getParamCurve } from './data/energy'
+import {
+  getDeviceDailyStats,
+  getEnergyToday,
+  getEnergyYesterday,
+  getParamCurve,
+} from './data/energy'
 import { getCetDataTypes } from './data/configuration'
 import {
   getCabinetDefects,
@@ -20,6 +25,7 @@ import {
 import {
   buildings,
   getBriefDevicesBySuper,
+  getDeviceCount,
   getDevicesBySuper,
   getEventCountByDevice,
   getHealthAverage,
@@ -123,7 +129,9 @@ const routes: MockRoute[] = [
   // 3.9 手动触发事件同步（恒返 0 = 互斥跳过语义）
   route('POST /event/sync', () => 0),
 
-  // ── 设备管理（§1；不做 §1.5/§1.13/§1.14-1.16/导出。§1.2 楼栋 2026-11-12 缺陷管理页恢复调用）──
+  // ── 设备管理（§1；不做 §1.5/§1.14-1.16/导出。§1.2 楼栋 2026-11-12 缺陷管理页恢复调用，§1.13 平均值 2026-11-16 医院总览页启用）──
+  // §1.1 查询总设备数（医院总览能源面板 KPI）
+  route('GET /device/count', () => getDeviceCount()),
   // §1.2 楼栋列表（全量含 0 柜楼栋；缺陷管理页楼栋树/面包屑）
   route('GET /device/buildings', () => buildings),
   // §1.4 箱柜分页（buildingId 可选；有开关优先→ID 升序）
@@ -172,7 +180,11 @@ const routes: MockRoute[] = [
     getLevelCountsBySuper(Number(params.superId)),
   ),
 
-  // ── 能耗/运维（4.3 设备详情页按需请求）──
+  // ── 能耗/运维（医院总览面板 + 4.3 设备详情页按需请求）──
+  // §2.1 今日能耗（分楼栋；10 分钟轮询）
+  route('GET /energy/today', () => getEnergyToday()),
+  // §2.2 昨日能耗（buildingId 不传 = 全院汇总行 0）
+  route('GET /energy/yesterday', ({ query }) => getEnergyYesterday(query)),
   // §2.4 设备近 30 天每日能耗（固定 30 条按日升序；无读数日为 null）
   route('GET /energy/devices/:deviceId/daily-stats', ({ params }) =>
     getDeviceDailyStats(Number(params.deviceId)),

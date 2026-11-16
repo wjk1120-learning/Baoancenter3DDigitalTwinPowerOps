@@ -6,7 +6,8 @@
  * §2.9 设备电能参数曲线：镜像 CET ReadDatalog 结构，医院负荷形态 + 确定性噪声。
  */
 
-import type { ParamCurve } from '../../api/energy/types'
+import type { EnergyBuildingStat, EnergyDailyStats, EnergyTodayStats, ParamCurve } from '../../api/energy/types'
+import { buildings } from './device'
 
 export interface MockEnergyDay {
   day: string
@@ -22,8 +23,100 @@ function fmtDay(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-/** 电网碳排放因子（kg/kWh，mock 取 0.635 附近的固定值） */
+/** 电网碳排放因子（kg/kWh，契约口径 = 用电量 × 0.635） */
 const CARBON_FACTOR = 0.635
+
+// ---- §2.1/§2.2 今日/昨日能耗（医院总览能源面板；数值确定性固定，便于断言与展示稳定） ----
+
+/** 各楼栋今日用电（kWh，固定值）；合计 2959.0 */
+const TODAY_BY_BUILDING: Record<string, number> = {
+  门诊1号楼: 860.0,
+  门诊2号楼: 645.5,
+  综合楼: 512.25,
+  住院楼: 730.75,
+  行政楼: 210.5,
+}
+/** 各楼栋有效测点数（合计 44） */
+const DEVICES_BY_BUILDING: Record<string, number> = {
+  门诊1号楼: 12,
+  门诊2号楼: 9,
+  综合楼: 8,
+  住院楼: 10,
+  行政楼: 5,
+}
+/** 昨日全院用电（kWh）＝今日合计 × 0.9（环比 ↑11.1%） */
+const YESTERDAY_TOTAL_KWH = 2663.1
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
+}
+
+/** §2.1 今日能耗（buildingStats 首键 = 「全院」合计，后接各楼栋——真实返回样例口径；
+ *  completeness=1 完整；数值确定性固定） */
+export function getEnergyToday(): EnergyTodayStats {
+  const buildingStats: Record<string, EnergyBuildingStat> = {}
+  let totalKwh = 0
+  let totalDevices = 0
+  for (const b of buildings) {
+    const kwh = TODAY_BY_BUILDING[b.buildingName] ?? 0
+    const devices = DEVICES_BY_BUILDING[b.buildingName] ?? 0
+    buildingStats[b.buildingName] = {
+      energyKwh: kwh,
+      carbonKg: round2(kwh * CARBON_FACTOR),
+      deviceCount: devices,
+    }
+    totalKwh += kwh
+    totalDevices += devices
+  }
+  // 「全院」键排首（后端真实返回口径）；碳 = 全院用电 × 0.635 后取整
+  const campus: EnergyBuildingStat = {
+    energyKwh: round2(totalKwh),
+    carbonKg: round2(totalKwh * CARBON_FACTOR),
+    deviceCount: totalDevices,
+  }
+  return {
+    day: fmtDay(new Date()),
+    buildingStats: { 全院: campus, ...buildingStats },
+    cacheTs: Math.floor(Date.now() / 1000),
+    error: '',
+    deviceTotal: totalDevices,
+    deviceSuccess: totalDevices,
+    completeness: 1,
+  }
+}
+
+/** §2.2 昨日能耗（buildingId 不传/0 = 全院汇总行；传楼栋 ID 返回该楼栋行；数值确定性固定） */
+export function getEnergyYesterday(query: { buildingId?: string }): EnergyDailyStats[] {
+  const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : 0
+  const day = fmtDay(new Date(Date.now() - 24 * 3600 * 1000))
+  const updatedAt = `${day}T00:30:00`
+
+  if (bid === 0) {
+    return [
+      {
+        day,
+        buildingId: 0,
+        energyKwh: YESTERDAY_TOTAL_KWH,
+        carbonKg: round2(YESTERDAY_TOTAL_KWH * CARBON_FACTOR),
+        deviceCount: 44,
+        updatedAt,
+      },
+    ]
+  }
+  const b = buildings.find((x) => x.id === bid)
+  if (!b) return []
+  const kwh = round2((TODAY_BY_BUILDING[b.buildingName] ?? 0) * 0.9)
+  return [
+    {
+      day,
+      buildingId: bid,
+      energyKwh: kwh,
+      carbonKg: round2(kwh * CARBON_FACTOR),
+      deviceCount: DEVICES_BY_BUILDING[b.buildingName] ?? 0,
+      updatedAt,
+    },
+  ]
+}
 
 export function getDeviceDailyStats(deviceId: number): MockEnergyDay[] {
   const out: MockEnergyDay[] = []

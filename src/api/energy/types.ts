@@ -1,4 +1,50 @@
-/** §2.4 DeviceDailyEnergy（docs/FY-Hospital-API.md 能耗管理模块） */
+/** docs/FY-Hospital-API.md 能耗管理模块（§2.1/§2.2/§2.4/§2.9） */
+
+/** §2.1 BuildingStat（分楼栋统计值） */
+export interface EnergyBuildingStat {
+  /** 该楼栋用电量（kWh） */
+  energyKwh: number
+  /** 该楼栋碳排放（kg） */
+  carbonKg: number
+  /** 该楼栋有效测点数 */
+  deviceCount: number
+}
+
+/** §2.1 EnergyTodayStats（今日能耗：分楼栋 + 缓存元信息与数据完整度） */
+export interface EnergyTodayStats {
+  /** 统计日期 yyyy-MM-dd */
+  day: string
+  /** 分楼栋统计：楼栋名 → 统计 */
+  buildingStats: Record<string, EnergyBuildingStat>
+  /** 缓存写入时间（epoch 秒） */
+  cacheTs: number
+  /** 最近一次刷新失败信息（空串表示正常） */
+  error: string
+  /** 参与统计的设备总数 */
+  deviceTotal: number
+  /** 拉取+兜底后读数可用的设备数 */
+  deviceSuccess: number
+  /** 数据完整度 = deviceSuccess / deviceTotal（0.0~1.0） */
+  completeness: number
+}
+
+/** §2.2 EnergyDailyStats（逐日能耗统计行；buildingId 0 = 全院汇总行） */
+export interface EnergyDailyStats {
+  /** 统计日期 yyyy-MM-dd */
+  day: string
+  /** 楼栋 ID（0=全院汇总，其余见配置中心楼栋维度表） */
+  buildingId: number
+  /** 当日用电量（kWh） */
+  energyKwh: number
+  /** 当日碳排放（kg） */
+  carbonKg: number
+  /** 有效测点数 */
+  deviceCount: number
+  /** 更新时间 */
+  updatedAt: string
+}
+
+/** §2.4 DeviceDailyEnergy（按设备查询近 30 天每日能耗行） */
 
 /** 按设备查询近 30 天每日能耗行（固定 30 条按日升序；无读数日为 null） */
 export interface DeviceDailyEnergy {
