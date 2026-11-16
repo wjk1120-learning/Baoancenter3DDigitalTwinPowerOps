@@ -8,6 +8,7 @@ const placeholderPage = () => import('../views/placeholder/PlaceholderPage.vue')
 
 /** 已实装页面（其余 nav 项走占位页）；键 = navConfig.id，页面实装一个登记一处 */
 const REAL_PAGES: Record<string, () => Promise<Component>> = {
+  overview: () => import('../views/hospital/HospitalOverviewPage.vue'),
   'power-room': () => import('../views/power-room/PowerRoomPage.vue'),
   alert: () => import('../views/alert-center/AlertCenterPage.vue'),
   device: () => import('../views/device-management/DeviceManagementPage.vue'),
@@ -23,8 +24,8 @@ const REAL_PAGES: Record<string, () => Promise<Component>> = {
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // 首页暂落配电房（当前唯一实页）；4.6 医院总览落地后与兜底路由一并改回 '/hospital'
-    { path: '/', redirect: '/power-room' },
+    // 医院总览已落地，首页/兜底回归 '/hospital'（导航同源）
+    { path: '/', redirect: '/hospital' },
     ...navConfig
       .filter((item) => !item.openInNewWindow)
       .map((item) => ({
@@ -49,7 +50,7 @@ const router = createRouter({
           { path: '/tests/camera', component: () => import('../tests/CameraDebugPage.vue') },
         ]
       : []),
-    { path: '/:pathMatch(.*)*', redirect: '/power-room' },
+    { path: '/:pathMatch(.*)*', redirect: '/hospital' },
   ],
 })
 

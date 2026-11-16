@@ -296,6 +296,13 @@ export function getLevelCountsBySuper(superId: number) {
   }
 }
 
+/** §1.13 全院箱柜健康度平均值（两位小数；从 cabinets.health 派生，与五档统计同源） */
+export function getHealthAverage(): number {
+  const hs = cabinets.map((c) => c.health ?? 100)
+  const avg = hs.reduce((s, v) => s + v, 0) / Math.max(1, hs.length)
+  return Math.round(avg * 100) / 100
+}
+
 /** mock 自洽性对账：告警数据的设备名是否都在目录中（测试断言用） */
 export function eventNamesMissingInCatalog(): string[] {
   const names = new Set(cabinets.map((c) => c.superName))

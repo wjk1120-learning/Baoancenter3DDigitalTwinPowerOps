@@ -20,6 +20,7 @@ watch(() => route.path, syncTabFromRoute, { immediate: true })
 
 // keep-alive 按组件名匹配：页面实装一个加一个（与 router 显式路由同步登记）
 const keepAliveInclude = [
+  'HospitalOverviewPage',
   'PowerRoomPage',
   'AlertCenterPage',
   'DeviceManagementPage',

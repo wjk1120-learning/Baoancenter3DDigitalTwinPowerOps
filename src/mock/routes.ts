@@ -22,6 +22,7 @@ import {
   getBriefDevicesBySuper,
   getDevicesBySuper,
   getEventCountByDevice,
+  getHealthAverage,
   getEventsByDevice,
   getHealthLevelStats,
   getLevelCountsBySuper,
@@ -154,6 +155,8 @@ const routes: MockRoute[] = [
   ),
   // §1.12 健康度五档统计
   route('GET /device/health/level-stats', ({ query }) => getHealthLevelStats(query)),
+  // §1.13 全院箱柜健康度平均值（医院总览页）
+  route('GET /device/health/average', () => getHealthAverage()),
 
   // ── 事件侧按设备/按柜查询（4.2④ 点位告警抽屉按需请求）──
   // §3.3 设备历史告警
