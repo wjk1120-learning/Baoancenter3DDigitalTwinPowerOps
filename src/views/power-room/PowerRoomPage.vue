@@ -3,7 +3,8 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CategoryPanel from './components/CategoryPanel.vue'
 import CabinetPanel from './components/CabinetPanel.vue'
-import { createPowerRoomScene } from './engine/scene'
+import { CABINET_MODEL_DIR } from './config'
+import { createPowerRoomScene } from '../../three/power-room/scene'
 import type { PowerRoomsFile } from './data/powerRoom'
 import config from './data/power-rooms.json'
 import { usePageTabsStore } from '../../store/pageTabs'
@@ -198,7 +199,7 @@ async function selectSwitch(deviceId: number, deviceName?: string) {
 onMounted(() => {
   if (!containerRef.value) return
   // 引擎常驻：渲染器/相机/灯光只建一次，切房走 setRoom（模型模板也跨房缓存）
-  scene = createPowerRoomScene(containerRef.value, pitch, { onCabinetClick })
+  scene = createPowerRoomScene(containerRef.value, pitch, { modelDir: CABINET_MODEL_DIR, onCabinetClick })
   mountRoom('room-1')
   // §1.3 后台拉取：拿到 switchingId 后预热默认房 §1.6
   void loadSwitchings()

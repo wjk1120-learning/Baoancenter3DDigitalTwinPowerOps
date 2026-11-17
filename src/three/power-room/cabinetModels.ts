@@ -9,13 +9,13 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { CABINET_MODEL_DIR } from '../config'
 
 /** 一级大柜统一柜高（米）；总览取景/名牌/聚焦构图都以它为基准 */
 export const CABINET_HEIGHT = 2.2
 
-// BASE_URL 前缀跟随 vite base（/baozhongTwin/），域名根绝对路径在带前缀部署下会 404
-const MODEL_URL = (m: string) => `${import.meta.env.BASE_URL}${CABINET_MODEL_DIR}/${m}.glb`
+// BASE_URL 前缀跟随 vite base（/baozhongTwin/），域名根绝对路径在带前缀部署下会 404。
+// 模型目录由调用方注入（复用约定：医院变量不进引擎，见 views/power-room/config.ts）
+const MODEL_URL = (modelDir: string, m: string) => `${import.meta.env.BASE_URL}${modelDir}/${m}.glb`
 
 const draco = new DRACOLoader()
 draco.setDecoderPath('/draco/')
@@ -25,11 +25,12 @@ gltf.setDRACOLoader(draco)
 const protoCache = new Map<string, Promise<THREE.Group | null>>()
 
 /** 一级大柜模板：归一化统一柜高、居中 x/z、落地 y=0、整体投阴影 */
-export function loadProto(model: string): Promise<THREE.Group | null> {
-  let p = protoCache.get(model)
+export function loadProto(model: string, modelDir: string): Promise<THREE.Group | null> {
+  const ck = modelDir + "/" + model
+  let p = protoCache.get(ck)
   if (!p) {
     p = gltf
-      .loadAsync(MODEL_URL(model))
+      .loadAsync(MODEL_URL(modelDir, model))
       .then((g) => {
         const obj = g.scene
         // 归一化：统一柜高、居中 x/z、落地 y=0；整个柜投阴影。
@@ -56,11 +57,11 @@ export function loadProto(model: string): Promise<THREE.Group | null> {
       .catch((err) => {
         // 失败不缓存：删掉缓存条目，下次切房重试（福永 bigUnitModel 同款）；
         // 仍返回 null，同房其余柜子继续摆
-        protoCache.delete(model)
+        protoCache.delete(ck)
         console.warn(`[PowerRoomScene] 模型 ${model} 加载失败，切房将重试`, err)
         return null
       })
-    protoCache.set(model, p)
+    protoCache.set(ck, p)
   }
   return p
 }
@@ -130,10 +131,10 @@ export interface KaiguanProto {
 let kaiguanProtoPromise: Promise<KaiguanProto | null> | null = null
 
 /** 归一化：丢影棚底板 → 按材质合并 → 宽 ≤1.0 / 进深 ≤0.9、居中落地；失败不缓存重试 */
-export function loadKaiguanProto(): Promise<KaiguanProto | null> {
+export function loadKaiguanProto(modelDir: string): Promise<KaiguanProto | null> {
   if (!kaiguanProtoPromise) {
     kaiguanProtoPromise = gltf
-      .loadAsync(MODEL_URL('kaiguan'))
+      .loadAsync(MODEL_URL(modelDir, 'kaiguan'))
       .then((g) => {
         const flat = flattenByMaterial(g.scene)
         const box = new THREE.Box3().setFromObject(flat)

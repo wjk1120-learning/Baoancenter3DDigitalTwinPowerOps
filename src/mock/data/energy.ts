@@ -28,24 +28,26 @@ const CARBON_FACTOR = 0.635
 
 // ---- §2.1/§2.2 今日/昨日能耗（医院总览能源面板；数值确定性固定，便于断言与展示稳定） ----
 
-/** 各楼栋今日用电（kWh，固定值）；合计 2959.0 */
+/** 各楼栋今日用电（kWh，固定值）；合计 3045.0（宿舍楼 2026-11-17 随 3D 园区补入） */
 const TODAY_BY_BUILDING: Record<string, number> = {
   门诊1号楼: 860.0,
   门诊2号楼: 645.5,
   综合楼: 512.25,
   住院楼: 730.75,
   行政楼: 210.5,
+  宿舍楼: 86.0,
 }
-/** 各楼栋有效测点数（合计 44） */
+/** 各楼栋有效测点数（合计 48） */
 const DEVICES_BY_BUILDING: Record<string, number> = {
   门诊1号楼: 12,
   门诊2号楼: 9,
   综合楼: 8,
   住院楼: 10,
   行政楼: 5,
+  宿舍楼: 4,
 }
 /** 昨日全院用电（kWh）＝今日合计 × 0.9（环比 ↑11.1%） */
-const YESTERDAY_TOTAL_KWH = 2663.1
+const YESTERDAY_TOTAL_KWH = 2740.5
 
 function round2(v: number): number {
   return Math.round(v * 100) / 100

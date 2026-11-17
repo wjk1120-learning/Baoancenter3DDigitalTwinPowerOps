@@ -20,13 +20,15 @@ function superNameFor(roomId: string, cabName: string): string {
  * 告警数据（data/event.ts）的 deviceName 与本目录 superName 精确同名，实现按设备/按柜的告警关联。
  */
 
-// ---- 楼栋（用户提供的真实命名；§1.2 mock 数据源——缺陷管理页 2026-11-12 恢复调用，设备管理页仍从柜行派生不用本表） ----
+// ---- 楼栋（用户提供的真实命名；§1.2 mock 数据源——缺陷管理页 2026-11-12 恢复调用，设备管理页仍从柜行派生不用本表；
+//      id 6 宿舍楼 2026-11-17 随 3D 园区补入，切真核对后端 §1.2 是否返回） ----
 export const buildings = [
   { id: 1, buildingName: '门诊1号楼' },
   { id: 2, buildingName: '门诊2号楼' },
   { id: 3, buildingName: '综合楼' },
   { id: 4, buildingName: '住院楼' },
   { id: 5, buildingName: '行政楼' },
+  { id: 6, buildingName: '宿舍楼' },
 ]
 
 /** 配电房 → 楼栋归属（mock 分配；行政楼暂无配电房柜） */

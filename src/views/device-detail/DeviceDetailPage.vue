@@ -11,7 +11,7 @@ import {
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
-import { createDeviceScene, modelOfType, type DeviceScene } from './engine/deviceScene'
+import { createDeviceScene, modelOfType, type DeviceScene } from '../../three/device-detail/deviceScene'
 import type { AlertItem, HistoryAlertRow } from '../../api/hospital/types'
 import type { DeviceBrief, SuperDeviceProfile } from '../../api/device/types'
 import type { EventBrief } from '../../api/event/types'

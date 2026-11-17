@@ -1,21 +1,63 @@
 <script setup lang="ts">
-import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchHealthAverage } from '../../api/device/device'
 import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
 import AlertPanel from '../../panels/AlertPanel.vue'
 import HealthPanel from '../../panels/HealthPanel.vue'
 import TransformerPanel from '../../panels/TransformerPanel.vue'
+import SceneLoadBar from './SceneLoadBar.vue'
+import { createCampusScene } from '../../three/campus/sceneManager'
+import { CAMPUS_BUILDINGS, CAMPUS_LAYOUT } from '../../config/campusConfig'
 
 defineOptions({ name: 'HospitalOverviewPage' })
 
 /**
- * 医院总览（4.6，福永 HospitalPage 同构的无 3D 版，docs/医院总览页移植方案.md）：
- * 中间为 3D 园区预留挂载区（后补 3D 时铺底，本壳与面板零改动），左右毛玻璃面板列
- * 悬浮贴边（福永 .side 同款：宽 380、避开顶部栏）。本期楼栋相关不做。
- * 面板均自取数据：健康面板（§1.12+§1.13）已挂；能源/设备监测/告警面板随批次补挂。
+ * 医院总览（4.6，福永 HospitalPage 同构，docs/3D园区一期方案.md）：
+ * 中间 3D 园区铺底（Draco GLB 六栋 + 福永式环境），左右毛玻璃面板列悬浮贴边。
+ * 园区引擎 = src/three/campus/（医院无关，楼栋/布局数据从 src/config/campusConfig 注入）。
+ * 生命周期（DeviceDetailPage 同款，避免与配电房抢 WebGL）：失活彻底 dispose、
+ * 激活重建（GLB 模板缓存模块级持久，重建只重摆位）。
  */
 const HOSPITAL_NAME = '深圳市宝安中心医院'
+
+// ---- 3D 园区（批1：纯视觉骨架） ----
+const sceneEl = ref<HTMLDivElement | null>(null)
+const loadProgress = ref(0)
+const sceneError = ref(false)
+let scene: { dispose(): void } | null = null
+
+function initScene() {
+  if (!sceneEl.value || scene) return
+  sceneError.value = false
+  loadProgress.value = 0
+  try {
+    scene = createCampusScene(sceneEl.value, {
+      buildings: CAMPUS_BUILDINGS,
+      layout: CAMPUS_LAYOUT,
+      onProgress: (done, total) => (loadProgress.value = done / total),
+      onReady: () => (loadProgress.value = 1),
+    })
+  } catch (err) {
+    console.warn('[HospitalOverview] 3D 场景初始化失败', err)
+    sceneError.value = true
+  }
+}
+function disposeScene() {
+  scene?.dispose()
+  scene = null
+}
+
+onMounted(() => {
+  void loadHealthScore()
+  nextTick(initScene)
+})
+onActivated(() => {
+  void loadHealthScore()
+  nextTick(initScene)
+})
+onDeactivated(disposeScene)
+onUnmounted(disposeScene)
 
 const router = useRouter()
 
@@ -24,8 +66,6 @@ const healthScore = ref<number | null>(null)
 async function loadHealthScore() {
   healthScore.value = await fetchHealthAverage().catch(() => null)
 }
-onMounted(loadHealthScore)
-onActivated(loadHealthScore)
 
 /** 时钟（1s tick） */
 const now = ref(new Date())
@@ -59,8 +99,13 @@ const ICONS = {
 
 <template>
   <div class="hospital">
-    <!-- 3D 园区预留挂载区（后补 3D 时场景铺底，absolute inset 0） -->
-    <div class="scene-reserve" aria-hidden="true" />
+    <!-- 3D 园区：canvas 容器铺底（z0），加载进度条与失败遮罩叠在其上 -->
+    <div ref="sceneEl" class="scene-host" />
+    <SceneLoadBar :progress="loadProgress" />
+    <div v-if="sceneError" class="scene-error">
+      <p>3D 园区加载失败（WebGL 不可用或模型异常）</p>
+      <button type="button" @click="disposeScene(); initScene()">重试</button>
+    </div>
 
     <!-- 中间状态胶囊（福永同款：顶部居中；hud 展开交互随 3D 后补） -->
     <div class="status-tag">
@@ -153,14 +198,40 @@ const ICONS = {
   overflow: hidden;
   position: relative;
 }
-/* 3D 园区预留挂载区：absolute 铺底，背景沿用页面底色（后补 3D 时由 canvas 覆盖） */
-.scene-reserve {
+/* 3D 园区 canvas 容器：absolute 铺底；3D 初始化前露页面底色过渡 */
+.scene-host {
   position: absolute;
   inset: 0;
   z-index: 0;
   background:
     radial-gradient(900px 520px at 50% 30%, rgba(76, 208, 232, 0.08), transparent 60%),
     linear-gradient(165deg, var(--bg-1), var(--bg-2));
+}
+.scene-error {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 26px;
+  border-radius: 14px;
+  background: rgba(96, 24, 30, 0.72);
+  border: 1px solid rgba(229, 72, 77, 0.55);
+  color: #ffd9da;
+  font-size: 14px;
+}
+.scene-error button {
+  padding: 6px 22px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 217, 218, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 /* 左右浮动面板：毛玻璃浮层，绝对定位避开顶部栏（福永 .side 同款） */

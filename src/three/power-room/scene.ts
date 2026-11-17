@@ -20,7 +20,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { computePowerRoomLayout, type CabinetSlot } from './layout'
 import { buildPowerRoomBus, type BusHandle } from './bus'
-import type { PowerRoomConfig } from '../data/powerRoom'
+import type { PowerRoomConfig } from '../../views/power-room/data/powerRoom'
 import { CABINET_HEIGHT, loadProto, loadKaiguanProto } from './cabinetModels'
 import { addFlowSegment } from './flowPath'
 import {
@@ -156,6 +156,8 @@ export function createPowerRoomScene(
   pitch: number,
   /** debug: true 时返回内部状态供 src/tests 下的调试页排查，生产代码不传 */
   opts: {
+    /** 柜体 GLB 目录（医院变量，复用约定：从 views/power-room/config 的 CABINET_MODEL_DIR 传入） */
+    modelDir: string
     debug?: boolean
     /** 点柜交互：命中大柜/名牌/二级开关时回调（点击判定 = 按下抬起位移 <6px） */
     onCabinetClick?: (hit: {
@@ -165,7 +167,7 @@ export function createPowerRoomScene(
       deviceId?: number
       deviceName?: string
     }) => void
-  } = {},
+  },
 ) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0xeaf3fa)
@@ -403,7 +405,7 @@ export function createPowerRoomScene(
     if (!frame || !slot || focusedCode !== code) return
     clearSwitches()
     const gen = buildGen
-    const proto = switches.length ? await loadKaiguanProto() : null
+    const proto = switches.length ? await loadKaiguanProto(opts.modelDir) : null
     if (switches.length && !proto) return
     if (gen !== buildGen || focusedCode !== code) return
 
@@ -597,7 +599,7 @@ export function createPowerRoomScene(
     status.textContent = `加载中 0/${cabinets.length} …`
 
     // 模板全部就绪（二次切房走缓存秒回）后开始分批建柜
-    Promise.all([...new Set(cabinets.map((c) => c.model))].map((m) => loadProto(m))).then(
+    Promise.all([...new Set(cabinets.map((c) => c.model))].map((m) => loadProto(m, opts.modelDir))).then(
       (list) => {
         if (gen !== buildGen) return
         const protoOf = new Map<string, THREE.Group | null>()
