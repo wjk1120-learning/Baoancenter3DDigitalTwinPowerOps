@@ -120,6 +120,33 @@ export function getEnergyYesterday(query: { buildingId?: string }): EnergyDailyS
   ]
 }
 
+/** §2.3 分楼栋近 7 日历史能耗（截至昨日 7 个完整日，升序；楼栋不存在返回空数组）。
+ *  数值确定性：今日值 × 伪随机日系数（种子=楼栋 id×10+日序），波动 ±35% 有涨跌观感。 */
+export function getBuildingEnergyHistory(query: { buildingId?: string }): EnergyDailyStats[] {
+  const bid = query.buildingId != null && query.buildingId !== '' ? Number(query.buildingId) : 0
+  const b = buildings.find((x) => x.id === bid)
+  if (!b) return []
+  const base = TODAY_BY_BUILDING[b.buildingName] ?? 0
+  if (!base) return []
+  const out: EnergyDailyStats[] = []
+  const today = new Date()
+  for (let i = 7; i >= 1; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+    // 确定性伪随机：楼栋 id 与日序共同决定波动系数（0.65~1.35），同一天刷新不变
+    const wobble = 0.65 + (((bid * 10 + i) * 9301 + 49297) % 233) / 233 / 1.8
+    const kwh = round2(base * wobble)
+    out.push({
+      day: fmtDay(d),
+      buildingId: bid,
+      energyKwh: kwh,
+      carbonKg: round2(kwh * CARBON_FACTOR),
+      deviceCount: DEVICES_BY_BUILDING[b.buildingName] ?? 0,
+      updatedAt: `${fmtDay(d)}T00:30:00`,
+    } as EnergyDailyStats)
+  }
+  return out
+}
+
 export function getDeviceDailyStats(deviceId: number): MockEnergyDay[] {
   const out: MockEnergyDay[] = []
   const today = new Date()

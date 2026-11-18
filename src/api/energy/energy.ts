@@ -33,6 +33,18 @@ export async function fetchEnergyYesterday(buildingId?: number): Promise<EnergyD
   return Array.isArray(data) ? data : []
 }
 
+/** §2.3 分楼栋历史能耗（近 7 个完整日，截至昨日；MySQL 持久化。buildingId 非法返回空）。
+ *  医院总览 3D 楼栋信息卡「近 7 日能耗趋势」数据源。 */
+export async function fetchBuildingEnergyHistory(buildingId: number): Promise<EnergyDailyStats[]> {
+  if (!buildingId) return []
+  const data = await bzGet<EnergyDailyStats[] | null>(
+    '/energy/buildings/history',
+    { buildingId },
+    conf(),
+  )
+  return Array.isArray(data) ? data : []
+}
+
 /** §2.4 按设备查询近 30 天每日能耗（无读数日 energyKwh/carbonKg 为 null） */
 export async function fetchDeviceDailyEnergy(deviceId: number): Promise<DeviceDailyEnergy[]> {
   if (!deviceId) return []

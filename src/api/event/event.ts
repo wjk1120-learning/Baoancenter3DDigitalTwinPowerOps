@@ -10,6 +10,7 @@ import { KeyedMemoryCache, MemoryCache } from '../../utils/cache'
 import { runWithConcurrency } from '../../utils/concurrency'
 import type { AlertEventLevel, AlertItem } from '../hospital/types'
 import type {
+  BuildingDailyAlarm,
   DeviceEventGroup,
   EventBrief,
   EventInfo,
@@ -211,6 +212,24 @@ export async function fetchDeviceEventCount(deviceId: number): Promise<number> {
   if (!deviceId) return 0
   const data = await eventGet<unknown>(`/event/devices/${deviceId}/count`)
   return Number(data) || 0
+}
+
+/** §3.7 楼栋当前告警数（GET /event/buildings/{buildingId}/current-count → Long；
+ *  该楼全部测点设备未处理（handle_status=0）告警数，无设备/无告警返回 0）。
+ *  医院总览 3D 楼栋信息卡「当前预警」数据源。 */
+export async function fetchBuildingCurrentAlarmCount(buildingId: number): Promise<number> {
+  if (!buildingId) return 0
+  const data = await eventGet<unknown>(`/event/buildings/${buildingId}/current-count`)
+  return Number(data) || 0
+}
+
+/** §3.8 楼栋近 7 日每日告警数（GET /event/buildings/{buildingId}/daily-counts；
+ *  2026-11-18 后端口径变更：不含今天，截至昨日共 7 个完整日、无告警日补 0、按日期升序，
+ *  全部事件口径）。医院总览 3D 楼栋信息卡「近 7 日每日预警」趋势数据源。 */
+export async function fetchBuildingDailyAlarms(buildingId: number): Promise<BuildingDailyAlarm[]> {
+  if (!buildingId) return []
+  const data = await eventGet<BuildingDailyAlarm[]>(`/event/buildings/${buildingId}/daily-counts`)
+  return Array.isArray(data) ? data : []
 }
 
 /** §3.5 箱柜分等级历史告警统计（失败降级全 0，弹窗头不阻断） */

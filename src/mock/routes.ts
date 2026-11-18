@@ -1,5 +1,5 @@
 import type { EventBrief } from '../api/event/types'
-import { eventRows } from './data/event'
+import { eventRows, getBuildingCurrentAlarmCount, getBuildingDailyAlarms } from './data/event'
 import {
   addMockCamera,
   cameraRows,
@@ -10,6 +10,7 @@ import {
   updateMockCamera,
 } from './data/ezviz'
 import {
+  getBuildingEnergyHistory,
   getDeviceDailyStats,
   getEnergyToday,
   getEnergyYesterday,
@@ -90,6 +91,16 @@ const routes: MockRoute[] = [
   }),
 
   // 3.4 分级统计（从同一份数据实时汇总）
+  // §3.7 楼栋当前告警数（3D 信息卡）
+  route('GET /event/buildings/:buildingId/current-count', ({ params }) =>
+    getBuildingCurrentAlarmCount(Number(params.buildingId)),
+  ),
+  // §3.8 楼栋近 7 日每日告警数（3D 信息卡趋势）
+  route('GET /event/buildings/:buildingId/daily-counts', ({ params }) =>
+    getBuildingDailyAlarms(Number(params.buildingId)),
+  ),
+  // §2.3 分楼栋近 7 日历史能耗（3D 信息卡趋势）
+  route('GET /energy/buildings/history', ({ query }) => getBuildingEnergyHistory(query)),
   route('GET /event/stats', () => {
     const total = eventRows.length
     const unhandled = eventRows.filter((e) => e.handleStatus === 0).length

@@ -1,4 +1,4 @@
-import type { EventBrief } from '../../api/event/types'
+import type { BuildingDailyAlarm, EventBrief } from '../../api/event/types'
 
 const now = Date.now()
 const ago = (minutes: number): string => {
@@ -22,3 +22,31 @@ export const eventRows: EventBrief[] = [
   { eventId: 'BZ-EV-0107', timeStr: ago(240), eventLevel: 2, deviceName: '6#变 2P03 电容柜', description: '功率因数低于 0.9（持续 10 分钟）', handleStatus: 0, locations: [{ building: 1, floor: '1' }] },
   { eventId: 'BZ-EV-0108', timeStr: ago(300), eventLevel: 1, deviceName: '1#变 P06/T1 配电柜', description: '馈线回路漏电流越限（紧急）', handleStatus: 1, locations: [{ building: 1, floor: '1' }] },
 ]
+
+
+// ---- §3.7/§3.8 楼栋告警统计（3D 楼栋信息卡；从 eventRows 真实过滤/派生） ----
+
+/** 楼栋当日事件行（locations 无解析条目的事件不归属任何楼栋） */
+function eventsOfBuilding(buildingId: number) {
+  return eventRows.filter((e) => e.locations?.some((l) => l.building === buildingId))
+}
+
+/** §3.7 楼栋当前告警数 = 该楼今日未处理（handleStatus=0）事件数 */
+export function getBuildingCurrentAlarmCount(buildingId: number): number {
+  return eventsOfBuilding(buildingId).filter((e) => e.handleStatus === 0).length
+}
+
+/** §3.8 楼栋近 7 日每日告警数（2026-11-18 后端口径变更：不含今天，截至昨日共 7 个
+ *  完整日、升序）。数值 = 种子确定性伪随机（0~4 条），刷新不变。 */
+export function getBuildingDailyAlarms(buildingId: number): BuildingDailyAlarm[] {
+  const out: BuildingDailyAlarm[] = []
+  const now = new Date()
+  for (let i = 7; i >= 1; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    const count = ((buildingId * 7 + i) * 137) % 5
+    out.push({ date: day, alarmCount: count })
+  }
+  return out
+}

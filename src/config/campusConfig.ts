@@ -108,6 +108,7 @@ export const CAMPUS_BUILDINGS: CampusBuildingConfig[] = [
     targetFoot: FOOT[5]!,
     yaw: YAW[5] ?? 0,
     foot: REAL_FOOT[5],
+    focusDir: [-1, -0.25, 0], // 正门朝东（2026-11-18 用户）：聚焦从东看向西，拍到正门立面
   },
   {
     id: 6,
