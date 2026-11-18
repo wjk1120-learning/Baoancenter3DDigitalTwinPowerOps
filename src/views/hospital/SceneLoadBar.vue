@@ -27,16 +27,16 @@ defineProps<{ progress: number }>()
   gap: 10px;
   padding: 14px 26px;
   border-radius: 14px;
-  background: rgba(13, 32, 54, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px rgba(5, 15, 30, 0.35);
+  box-shadow: 0 8px 24px rgba(43, 108, 160, 0.18);
 }
 .bar {
   width: 260px;
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(43, 108, 160, 0.16);
   overflow: hidden;
 }
 .fill {
@@ -47,7 +47,8 @@ defineProps<{ progress: number }>()
 }
 .txt {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+  color: #1e3a5f;
   letter-spacing: 1px;
 }
 .loadbar-leave-active {
