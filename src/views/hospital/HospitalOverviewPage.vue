@@ -11,9 +11,12 @@ import TransformerPanel from '../../panels/TransformerPanel.vue'
 import SceneLoadBar from './SceneLoadBar.vue'
 import BuildingInfoCard from './BuildingInfoCard.vue'
 import FloorPanel from './FloorPanel.vue'
+import FloorBoard from './FloorBoard.vue'
+import FloorAlarmCallouts from './FloorAlarmCallouts.vue'
 import { summarizeFloorAlarms } from './floorAlarmState'
 import type { FloorAlarmSummary } from './floorAlarmState'
 import { createCampusScene } from '../../three/campus/sceneManager'
+import type { FloorAlarmAnchor } from '../../three/campus/sceneManager'
 import { CAMPUS_BUILDINGS, CAMPUS_LAYOUT } from '../../config/campusConfig'
 import type { AlertItem } from '../../api/hospital/types'
 
@@ -44,6 +47,10 @@ const selectedFloor = ref<string | null>(null)
 const focusedFloors = ref<string[]>([])
 /** §3.11 全量未处理原始列表（亮灯/选择器染色/看板批3 三视图共用一份） */
 const unhandledAlerts = ref<AlertItem[]>([])
+/** 全屏态（批3）：收起两侧面板看全屏 3D；亮灯楼层挂引线小卡。聚焦自动退出。 */
+const fullscreen = ref(false)
+/** 楼层选择器收起状态（告警看板随动左移） */
+const panelCollapsed = ref(false)
 let scene: {
   dispose(): void
   focusBuilding(id: number): void
@@ -51,6 +58,7 @@ let scene: {
   focusFloor(buildingId: number, floor: string): void
   backToBuilding(): void
   getFloors(buildingId: number): string[]
+  getFloorAlarmAnchors(): FloorAlarmAnchor[]
   setBuildingEnergy(kwhById: Map<number, number>): void
   setBuildingAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]): void
 } | null = null
@@ -68,6 +76,7 @@ function initScene() {
         if (pick.kind === 'building' && pick.buildingId != null) {
           const cfg = CAMPUS_BUILDINGS.find((b) => b.id === pick.buildingId)
           if (!cfg) return
+          fullscreen.value = false // 聚焦自动退出全屏（拍板口径）
           selectedId.value = cfg.id
           selectedName.value = cfg.name
           selectedFloor.value = null
@@ -109,7 +118,15 @@ function clearSelection() {
 }
 
 const onKeydown = (ev: KeyboardEvent) => {
-  if (ev.key === 'Escape' && selectedId.value != null) clearSelection()
+  if (ev.key !== 'Escape') return
+  // Esc 优先级：聚焦/楼层态先回全景；否则全屏态退全屏
+  if (selectedId.value != null) clearSelection()
+  else if (fullscreen.value) fullscreen.value = false
+}
+
+/** 全屏态告警楼层锚点（引擎每帧现算的屏幕投影；Callout 组件 rAF 轮询渲染） */
+function getAnchors(): FloorAlarmAnchor[] {
+  return scene?.getFloorAlarmAnchors() ?? []
 }
 
 // ---- 数据联动：楼名 kWh + 告警楼层亮灯/染色 ----
@@ -211,6 +228,7 @@ onMounted(() => {
 })
 onActivated(() => {
   window.addEventListener('keydown', onKeydown)
+  fullscreen.value = false // keep-alive 复活复位全景态（拍板收口项）
   void startSceneLinkages()
 })
 onDeactivated(() => {
@@ -266,6 +284,20 @@ const ICONS = {
         :alarms="focusedAlarmMap"
         :selected-floor="selectedFloor"
         @focus-floor="selectFloor"
+        @collapsed-change="panelCollapsed = $event"
+      />
+    </Transition>
+
+    <!-- 楼层告警看板（选层后出现；处理按钮走 §3.10，级联语义；随选择器收起左移） -->
+    <Transition name="fb">
+      <FloorBoard
+        v-if="selectedId != null && selectedFloor != null"
+        :building-id="selectedId"
+        :building-name="selectedName"
+        :floor="selectedFloor"
+        :alerts="unhandledAlerts"
+        :panel-collapsed="panelCollapsed"
+        @handled="() => void refreshBuildingAlarms()"
       />
     </Transition>
 
@@ -282,14 +314,26 @@ const ICONS = {
       />
     </Transition>
 
-    <!-- 中间状态胶囊（福永同款：顶部居中；hud 展开交互随 3D 后补） -->
-    <div class="status-tag">
-      <span class="pulse-dot" />
-      <span>医院环境正常</span>
+    <!-- 中间状态胶囊 + 全屏开关（批3：全屏收起两侧面板，亮灯楼层挂引线小卡） -->
+    <div class="status-bar">
+      <div class="status-tag">
+        <span class="pulse-dot" />
+        <span>医院环境正常</span>
+      </div>
+      <button type="button" class="fs-btn" @click="fullscreen = !fullscreen">
+        {{ fullscreen ? '退出全屏' : '全屏' }}
+      </button>
     </div>
 
-    <!-- 左侧浮动面板列 -->
-    <aside class="side left" :class="{ 'side-hidden': focused }">
+    <!-- 全屏态告警楼层引线小卡（锚点每帧现算；只展示不点击） -->
+    <FloorAlarmCallouts
+      v-if="fullscreen && selectedId == null"
+      :get-anchors="getAnchors"
+      :alerts="unhandledAlerts"
+    />
+
+    <!-- 左侧浮动面板列（全屏态滑出屏幕） -->
+    <aside class="side left" :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }">
       <section class="panel-block glass-card" :style="{ flex: 0.7 }">
         <div class="card-head">
           <span class="card-ico">
@@ -319,8 +363,8 @@ const ICONS = {
       </section>
     </aside>
 
-    <!-- 右侧浮动面板列 -->
-    <aside class="side right" :class="{ 'side-hidden': focused }">
+    <!-- 右侧浮动面板列（全屏态滑出屏幕） -->
+    <aside class="side right" :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }">
       <section class="panel-block glass-card" :style="{ flex: 1 }">
         <div class="card-head">
           <span class="card-ico">
@@ -410,13 +454,24 @@ const ICONS = {
 .side.left {
   left: 24px;
 }
-/* 聚焦态：面板淡出让位（pointer-events 同步关掉避免挡住信息卡点击） */
+/* 聚焦态：面板淡出让位（pointer-events 同步关掉避免挡住信息卡点击）；
+   全屏态：面板滑出屏幕（批3，transition 只动 transform/opacity——hallmark 底线） */
 .side {
-  transition: opacity 0.35s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 .side-hidden {
   opacity: 0;
   pointer-events: none;
+}
+.side-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.side-out.side.left {
+  transform: translateX(-110%);
+}
+.side-out.side.right {
+  transform: translateX(110%);
 }
 .side.right {
   right: 24px;
@@ -434,13 +489,18 @@ const ICONS = {
   position: relative;
 }
 
-/* 中间状态胶囊（福永 status-tag 同款：顶部居中） */
-.status-tag {
+/* 中间状态栏（胶囊 + 全屏开关，顶部居中；批3 全屏收起两侧面板挂引线小卡） */
+.status-bar {
   position: absolute;
   top: calc(var(--topbar-height) + 14px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status-tag {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -452,6 +512,24 @@ const ICONS = {
   font-size: 14px;
   font-weight: 600;
   color: var(--title);
+}
+.fs-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 20px rgba(43, 108, 160, 0.12);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+}
+.fs-btn:hover {
+  background: rgba(43, 124, 227, 0.1);
+}
+.fs-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 .pulse-dot {
   width: 8px;
@@ -490,12 +568,27 @@ const ICONS = {
   opacity: 0;
   transform: translateX(-24px);
 }
+/* 告警看板从左轻滑入（锚在收起条右缘，展开随动走自身 transform） */
+.fb-enter-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fb-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.fb-enter-from,
+.fb-leave-to {
+  opacity: 0;
+  transform: translateX(-16px);
+}
 /* 动效兜底：系统开启「减少动态效果」时只保留透明度过渡 */
 @media (prefers-reduced-motion: reduce) {
   .bic-enter-active,
   .bic-leave-active,
   .fp-enter-active,
-  .fp-leave-active {
+  .fp-leave-active,
+  .fb-enter-active,
+  .fb-leave-active,
+  .side {
     transition: opacity 0.2s ease;
   }
   .bic-enter-from,
@@ -503,7 +596,11 @@ const ICONS = {
     transform: translateY(-50%);
   }
   .fp-enter-from,
-  .fp-leave-to {
+  .fp-leave-to,
+  .fb-enter-from,
+  .fb-leave-to,
+  .side-out.side.left,
+  .side-out.side.right {
     transform: none;
   }
 }

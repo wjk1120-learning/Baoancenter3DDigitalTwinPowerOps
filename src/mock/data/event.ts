@@ -29,8 +29,8 @@ export function mockTodayStr(): string {
  * 标记处理直接改本数组；/event/stats、/event/grouped、/event/unhandled 实时重算。
  */
 export const eventRows: EventBrief[] = [
-  { eventId: 'BZ-EV-0101', timeStr: ago(3), eventLevel: 1, deviceName: '1#变 P06/T1 配电柜', description: '进线断路器温度告警（75℃，阈值 70℃）', handleStatus: 0, locations: [{ building: 1, floor: '1' }] },
-  { eventId: 'BZ-EV-0102', timeStr: ago(18), eventLevel: 2, deviceName: '1#变 P06/T1 配电柜', description: 'C 相电流越限（持续 5 分钟）', handleStatus: 0, locations: [{ building: 1, floor: '3' }] },
+  { eventId: 'BZ-EV-0101', timeStr: ago(3), eventLevel: 1, deviceName: '1#变 P06/T1 配电柜', description: '进线断路器温度告警（75℃，阈值 70℃）', handleStatus: 0, locations: [{ building: 1, floor: '1', locationNumber: 'FY-ZK-1F-01' }] },
+  { eventId: 'BZ-EV-0102', timeStr: ago(18), eventLevel: 2, deviceName: '1#变 P06/T1 配电柜', description: 'C 相电流越限（持续 5 分钟）', handleStatus: 0, locations: [{ building: 1, floor: '3', locationNumber: 'FY-ZK-3F-02' }] },
   { eventId: 'BZ-EV-0103', timeStr: ago(47), eventLevel: 3, deviceName: '2#变 P08/T2 配电柜', description: '抽屉单元二次插件接触不良提示', handleStatus: 0, locations: [{ building: 2, floor: '2' }] },
   { eventId: 'BZ-EV-0104', timeStr: ago(65), eventLevel: 2, deviceName: '3#变 P06/T3 配电柜', description: '母线电压波动越限（-7%）', handleStatus: 1, locations: [{ building: 1, floor: '1' }] },
   { eventId: 'BZ-EV-0105', timeStr: ago(90), eventLevel: 4, deviceName: '4#变 P04/T4 配电柜', description: '柜内风机自检提示', handleStatus: 0, locations: [{ building: 6, floor: '6' }] },
@@ -40,7 +40,7 @@ export const eventRows: EventBrief[] = [
   { eventId: 'BZ-EV-0109', timeStr: agoDays(1, 120), eventLevel: 2, deviceName: '3#变 P06/T3 配电柜', description: '母线绝缘监测越限（昨日遗留未处理）', handleStatus: 0, locations: [{ building: 4, floor: '5' }] },
   { eventId: 'BZ-EV-0110', timeStr: agoDays(2, 200), eventLevel: 1, deviceName: '3#变 P01/T3 进线柜', description: '馈线回路漏电流越限（前日遗留未处理）', handleStatus: 0, locations: [{ building: 3, floor: '12' }] },
   { eventId: 'BZ-EV-0111', timeStr: ago(15), eventLevel: 2, deviceName: '1#变 P04/T1 配电柜', description: '地下层强电井温度越限（_under 未接入不亮灯样本）', handleStatus: 0, locations: [{ building: 3, floor: '-1' }] },
-  { eventId: 'BZ-EV-0112', timeStr: ago(8), eventLevel: 1, deviceName: '2#变 P10/T2 配电柜', description: '进线柜局放异常（多点定位）', handleStatus: 0, locations: [{ building: 5, floor: '2' }, { building: 1, floor: '5' }] },
+  { eventId: 'BZ-EV-0112', timeStr: ago(8), eventLevel: 1, deviceName: '2#变 P10/T2 配电柜', description: '进线柜局放异常（多点定位）', handleStatus: 0, locations: [{ building: 5, floor: '2', locationNumber: 'FY-XZ-2F-01' }, { building: 1, floor: '5', locationNumber: 'FY-ZK-5F-03' }] },
 ]
 
 // ---- §3.7/§3.8 楼栋告警统计（3D 楼栋/楼层信息卡；从 eventRows 真实过滤/派生） ----

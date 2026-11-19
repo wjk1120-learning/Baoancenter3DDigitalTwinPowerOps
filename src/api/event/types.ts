@@ -9,6 +9,8 @@ export interface AlertLocation {
   building: number
   /** 楼层，取值如 "G" / "2" / "3A" */
   floor: string
+  /** 原始管理编号（该条 building/floor 的解析来源，如 FY-XX-XF-01；契约 v5.9+ 随 EventBrief 下发） */
+  locationNumber?: string
 }
 
 /** REST 告警查询返回的精简事件结构（3.1 today / 3.2 grouped 组内 / 3.3 按设备 通用） */

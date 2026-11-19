@@ -5,6 +5,7 @@ import { eventLevelLabel, normalizeEventLevel } from '../api/event/mappers'
 import type { AlertEventLevel, AlertItem } from '../api/hospital/types'
 import { eventPushSocket } from '../ws/eventPushSocket'
 import { useMock } from '../mock'
+import AlertDetailDialog from '../components/AlertDetailDialog.vue'
 
 /**
  * 医院总览 · 告警信息面板（福永 AlertPanel 同构，宝中重写）：
@@ -106,6 +107,15 @@ const connText = computed(() => {
   if (connState.value === 'stale') return '数据可能延迟'
   return ''
 })
+
+/** 条目点击 → 告警详情弹窗（可复用件，与 3D 告警看板共用） */
+const detail = ref<AlertItem | null>(null)
+/** 弹窗内处理成功 → 本地行翻已处理（WS event_handled 亦会收敛，双保险） */
+function onDialogHandled() {
+  const id = detail.value?.id
+  const hit = id ? alerts.value.find((a) => a.id === id) : null
+  if (hit) hit.status = 'done'
+}
 </script>
 
 <template>
@@ -116,7 +126,16 @@ const connText = computed(() => {
 
     <div class="scroll-wrap">
       <ul v-if="alerts.length" class="list">
-        <li v-for="a in alerts" :key="a.id" class="item" :class="`lv-${gradeOf(a)}`">
+        <li
+          v-for="a in alerts"
+          :key="a.id"
+          class="item"
+          :class="`lv-${gradeOf(a)}`"
+          role="button"
+          tabindex="0"
+          @click="detail = a"
+          @keydown.enter="detail = a"
+        >
           <div class="top">
             <span class="grade" :class="`g-${gradeOf(a)}`">{{ gradeLabel(a) }}</span>
             <span class="device" :title="a.device">{{ a.device || '未知设备' }}</span>
@@ -133,6 +152,8 @@ const connText = computed(() => {
       <span>共 {{ alerts.length }} 条</span>
       <span class="foot-note">今日全部（实时推送）</span>
     </div>
+
+    <AlertDetailDialog :alert="detail" @close="detail = null" @handled="onDialogHandled" />
   </div>
 </template>
 
@@ -200,6 +221,7 @@ const connText = computed(() => {
     inset 0 1px 1px rgba(255, 255, 255, 0.85),
     inset 0 -6px 14px rgba(82, 149, 232, 0.05),
     0 2px 6px rgba(43, 108, 160, 0.06);
+  cursor: pointer;
 }
 .item.lv-1 {
   border-left-color: var(--danger);

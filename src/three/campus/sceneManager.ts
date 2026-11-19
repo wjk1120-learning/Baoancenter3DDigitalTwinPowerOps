@@ -285,6 +285,9 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   const buildingRoots = new Map<number, THREE.Group>()
   const buildingBoxes = new Map<number, THREE.Box3>()
   const buildingFloors = new Map<number, Map<string, THREE.Object3D>>()
+  /** 楼层静态世界盒：buildingId → floorKey → Box3（加载摆位后算定，与楼名标签/
+   *  聚焦取景同源；引线卡锚点用） */
+  const floorWorldBoxes = new Map<number, Map<string, THREE.Box3>>()
   /** 最近一次告警集合（§3.1 首拉可能先于楼栋加载完成，加载后回放亮灯） */
   let pendingAlarms: { buildingId: number; floorKey: string; level: number }[] | null = null
   /** 最近一次染色数据（§2.1 可能先于楼栋加载完成，标签创建时回填 kWh）。
@@ -313,6 +316,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         buildingRoots.set(cfg.id, b.object)
         buildingBoxes.set(cfg.id, b.box)
         buildingFloors.set(cfg.id, b.floors)
+        floorWorldBoxes.set(cfg.id, b.floorBoxes)
         grown.push(b.object)
       }
       done++
@@ -560,8 +564,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   const dimmedOrig = new Map<THREE.Material, { color: number; emissive: number; intensity: number }>()
   /** pop 前 scale（退出还原） */
   const popOrig = new Map<THREE.Object3D, THREE.Vector3>()
-  /** 告警楼层去重等级表："{buildingId}|{floorKey}" → level（同层多条取更高=数值更小）。
-   *  引线卡锚点（getFloorAlarmAnchors）按楼层取点用 */
+  /** 告警楼层表："{buildingId}|{floorKey}" → level（同层多条取更高=数值更小）。
+   *  引线卡锚点按楼层从 floorWorldBoxes 取静态盒中心 */
   const alarmFloorLevels = new Map<string, number>()
   /** 当前聚焦楼层（契约键；null = 楼栋聚焦态未选层） */
   let focusedFloor: string | null = null
@@ -710,25 +714,80 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     return null
   }
 
-  /** 告警楼层引线卡锚点（全景可见楼层；每次调用现算投影——层数量小，供页面轮询渲染卡） */
+  /** 告警楼层引线卡锚点（每次调用现算投影——供页面 rAF 轮询渲染卡）：
+   *  锚点 = 楼层静态世界盒中心（glbLoader 摆位后算定，与楼名标签/聚焦取景同源已验证）；
+   *  遮挡剔除：相机→锚点射线在到达前先命中其它可见楼的包围盒（该层被前排楼挡住、
+   *  看不清）就不出卡。 */
+  let diagNext = 0
   function getFloorAlarmAnchors(): FloorAlarmAnchor[] {
     const out: FloorAlarmAnchor[] = []
     if (!alarmFloorLevels.size) return out
     const W = Math.max(container.clientWidth, 1)
     const H = Math.max(container.clientHeight, 1)
+    const camPos = camera.position
+    const dir = new THREE.Vector3()
+    const hit = new THREE.Vector3()
+    const ray = new THREE.Ray()
     for (const [key, level] of alarmFloorLevels) {
       const sep = key.indexOf('|')
       const bid = Number(key.slice(0, sep))
       const floorKey = key.slice(sep + 1)
       const root = buildingRoots.get(bid)
-      const node = buildingFloors.get(bid)?.get(floorKey)
-      if (!root || !node || !root.visible) continue
-      const c = new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3())
-      v3.copy(c).project(camera)
+      const floorBox = floorWorldBoxes.get(bid)?.get(floorKey)
+      if (!root || !root.visible || !floorBox) continue
+      const anchor = floorBox.getCenter(new THREE.Vector3())
+      dir.copy(anchor).sub(camPos)
+      const distAnchor = dir.length()
+      if (distAnchor < 1) continue
+      ray.set(camPos, dir.divideScalar(distAnchor))
+      // 遮挡剔除：其它可见楼的包围盒先于锚点命中 → 被挡，跳过
+      let occluded = false
+      for (const [obid, obox] of buildingBoxes) {
+        if (obid === bid || !buildingRoots.get(obid)?.visible) continue
+        if (ray.intersectBox(obox, hit) && hit.distanceTo(camPos) < distAnchor - 1) {
+          occluded = true
+          break
+        }
+      }
+      if (occluded) continue
+      v3.copy(anchor).project(camera)
       if (v3.z > 1) continue
       const x = (v3.x * 0.5 + 0.5) * W
       const y = (-v3.y * 0.5 + 0.5) * H
       out.push({ buildingId: bid, floorKey, level, x, y, side: x < W / 2 ? 'left' : 'right' })
+    }
+    // TODO-REMOVE(诊断): 每 10 秒一行——「标签DOM vs 同点投影」交叉验证 + 各锚点屏幕位
+    if (performance.now() > diagNext) {
+      diagNext = performance.now() + 10_000
+      const parts: string[] = []
+      for (const [bid, bb] of buildingBoxes) {
+        const el = labelEls.get(bid)
+        if (!el) continue
+        const c = bb.getCenter(new THREE.Vector3())
+        c.y = bb.max.y + 8
+        v3.copy(c).project(camera)
+        parts.push(
+          `楼${bid}标签(${el.style.left},${el.style.top})同点投影(${((v3.x * 0.5 + 0.5) * W).toFixed(0)},${((-v3.y * 0.5 + 0.5) * H).toFixed(0)})`,
+        )
+      }
+      const pts = out
+        .map((a) => `${a.buildingId}|${a.floorKey}→(${a.x.toFixed(0)},${a.y.toFixed(0)})`)
+        .join(' ')
+      console.warn('[诊断]', parts.join(' '), '|| 锚点:', pts, `viewport=${W}x${H}`)
+      // TODO-REMOVE(诊断): 每个锚点像素处的视觉命中（终极判定：圆点钉没钉在正确楼层上）
+      // ⚠ 锚点坐标是容器布局系（1920），外层缩放后需换算成客户坐标再射线检测
+      const rect = renderer.domElement.getBoundingClientRect()
+      const sx = rect.width / Math.max(W, 1)
+      const sy = rect.height / Math.max(H, 1)
+      const hits = out.map((a) => {
+        const cx = rect.left + a.x * sx
+        const cy = rect.top + a.y * sy
+        const fl = pickFloorAt(cx, cy)
+        if (fl) return `${a.buildingId}|${a.floorKey}→命中 楼${fl.buildingId}-${fl.floor}F ${fl.buildingId === a.buildingId && fl.floor === a.floorKey ? '✓' : '✗错楼'}`
+        const b = pickBuildingAt(cx, cy)
+        return `${a.buildingId}|${a.floorKey}→命中 ${b ? `楼${b}(非楼层点)` : '空白'} ${b === a.buildingId ? '~同楼非层' : ''}`
+      })
+      console.warn('[视觉命中]', hits.join('  '))
     }
     return out
   }
@@ -765,7 +824,10 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     for (const a of alarms) {
       const key = `${a.buildingId}|${a.floorKey}`
       const prev = alarmFloorLevels.get(key)
-      alarmFloorLevels.set(key, prev == null ? a.level : Math.min(prev, a.level))
+      if (prev != null) {
+        alarmFloorLevels.set(key, Math.min(prev, a.level))
+        continue
+      }
       const node = buildingFloors.get(a.buildingId)?.get(a.floorKey)
       if (!node) continue
       node.traverse((o) => {
@@ -784,6 +846,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         const o2 = dimmedOrig.get(orig)
         if (o2) std.color.setHex(o2.color)
       })
+      alarmFloorLevels.set(key, a.level)
     }
   }
 

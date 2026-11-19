@@ -111,7 +111,8 @@ export function parseAlertLocations(raw: unknown): AlertLocation[] | null {
     const building = Number(o.building)
     const floor = String(o.floor ?? '').trim()
     if (!Number.isFinite(building) || building <= 0 || !floor) continue
-    out.push({ building, floor })
+    const locationNumber = String(o.locationNumber ?? '').trim()
+    out.push({ building, floor, ...(locationNumber ? { locationNumber } : {}) })
   }
   return out.length ? out : null
 }

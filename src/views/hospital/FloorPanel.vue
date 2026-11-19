@@ -22,21 +22,33 @@ const props = defineProps<{
   /** 当前选中层（楼层态高亮；null = 未选层） */
   selectedFloor?: string | null
 }>()
-const emit = defineEmits<{ 'focus-floor': [floor: string] }>()
+const emit = defineEmits<{
+  'focus-floor': [floor: string]
+  /** 收起/展开状态变化（告警看板随动左移用） */
+  'collapsed-change': [collapsed: boolean]
+}>()
 
 const collapsed = ref(false)
 watch(
   () => props.buildingId,
   () => {
     collapsed.value = false
+    emit('collapsed-change', false)
   },
 )
 watch(
   () => props.selectedFloor,
   (v) => {
-    if (v != null) collapsed.value = true
+    if (v != null && !collapsed.value) {
+      collapsed.value = true
+      emit('collapsed-change', true)
+    }
   },
 )
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value
+  emit('collapsed-change', collapsed.value)
+}
 
 function pick(floor: string) {
   emit('focus-floor', floor)
@@ -60,7 +72,7 @@ const label = (floor: string) => floorNodeName(floor) ?? floor
     <template v-if="!collapsed">
       <header class="fp-head">
         <h3 class="fp-title">{{ buildingName }}</h3>
-        <button type="button" class="fp-fold" aria-label="收起楼层列表" @click="collapsed = true">«</button>
+        <button type="button" class="fp-fold" aria-label="收起楼层列表" @click="toggleCollapsed">«</button>
       </header>
       <div class="fp-list">
         <button
@@ -77,7 +89,7 @@ const label = (floor: string) => floorNodeName(floor) ?? floor
       </div>
     </template>
     <template v-else>
-      <button type="button" class="fp-fold" aria-label="展开楼层列表" title="展开楼层列表" @click="collapsed = false">»</button>
+      <button type="button" class="fp-fold" aria-label="展开楼层列表" title="展开楼层列表" @click="toggleCollapsed">»</button>
       <div class="fp-chips">
         <button
           v-for="f in floors"

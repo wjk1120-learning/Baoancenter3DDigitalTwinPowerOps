@@ -22,6 +22,10 @@ export interface LoadedBuilding {
   object: THREE.Group
   /** 楼层节点映射：契约 floor 字符串 → 该层 Object3D（"3"→3F 节点） */
   floors: Map<string, THREE.Object3D>
+  /** 楼层世界盒（摆位后、压扁前算的静态真值）：floorKey → Box3。
+   *  引线卡锚点/楼层取景用它——运行时 expandByObject(mesh) 会踩到陈旧父矩阵，
+   *  静态盒与楼名标签/聚焦取景同源（都由 normalize 摆位后一次算定，已验证正确）。 */
+  floorBoxes: Map<string, THREE.Box3>
   /** 世界包围盒（摆位后，供取景/拾取盒） */
   box: THREE.Box3
 }
@@ -98,5 +102,12 @@ function normalize(src: THREE.Object3D, cfg: CampusBuildingConfig): LoadedBuildi
       if (key != null && !floors.has(key)) floors.set(key, o)
     }
   })
-  return { object: holder, floors, box: new THREE.Box3().setFromObject(holder) }
+  // 楼层静态世界盒（摆位后算定）。⚠ 必须先 holder.updateMatrixWorld(true) 刷新整棵
+  // 子树：步骤 2 居中改过 src.position，从楼层节点起算 updateWorldMatrix(false,false)
+  // 只用旧父矩阵，会带上居中前的偏移（引线卡锚点曾因此整体漂移）。刷新后从节点起算
+  // 与从 holder 起算（下面 box）同源同值，引线卡锚点/楼层取景用。
+  holder.updateMatrixWorld(true)
+  const floorBoxes = new Map<string, THREE.Box3>()
+  for (const [key, node] of floors) floorBoxes.set(key, new THREE.Box3().setFromObject(node))
+  return { object: holder, floors, floorBoxes, box: new THREE.Box3().setFromObject(holder) }
 }
