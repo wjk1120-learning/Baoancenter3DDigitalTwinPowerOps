@@ -28,6 +28,12 @@ export interface CampusBuildingConfig {
    *  路网/广场定位用本体真实占地；含桥等附属的楼（本体偏整体盒一侧）必须填，
    *  否则按 targetFoot/2 方形近似会算偏（如综合楼南缘多算 30m 把路推到桥板外）。 */
   foot?: { x: [number, number]; z: [number, number] }
+  /** 加载时剔除的节点名子串（不渲染、不进归一包围盒）。
+   *  建模附带物不需要进 3D 场景时配（如宿舍楼悬空俯视标注）。 */
+  excludeNodes?: string[]
+  /** 高度独立缩放（可选，y 方向乘子，缺省 1）。模型高宽比失真（换模版后偏矮/偏高）
+   *  且不想动 footprint 归一时用——只拔高不扩底。 */
+  heightScale?: number
 }
 
 // ---- 楼层名解析（契约 floor 字符串 ↔ GLB 节点名，纯公式） ----

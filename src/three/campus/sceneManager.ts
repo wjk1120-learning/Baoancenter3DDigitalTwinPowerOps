@@ -97,12 +97,21 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   scene.add(groundGroup)
 
   // ---- 初始机位：按配置预计算的园区包围盒取景（楼栋到货后不重摆相机，构图稳定） ----
-  // 取景只含核心楼群（与路网 yard 同口径）——行政楼等独立地块参与取景会把相机推到
-  // 数百米外的超远景（用户观感"楼都被压缩了"的真根因）
+  // 取景距离只按核心楼群（与路网 yard 同口径）——行政楼等独立地块参与推距会把相机推到
+  // 数百米外的超远景（用户观感"楼都被压缩了"的真根因）；但目标中心按全部楼栋并对齐，
+  // 行政楼完整入画（2026-11-19 拍板：镜头西移，最东端天桥允许被右面板遮住一点）
   const campusBounds = boundsFromConfig(buildings.filter((b) => layout.coreIds.includes(b.id)))
-  fitCameraTo(campusBounds, camera, container)
-  controls.target.copy(campusBounds.getCenter(new THREE.Vector3()))
+  const viewBounds = boundsFromConfig(buildings)
+  /** 全景取景盒：初始为配置估算，楼栋就绪后换真实渲染盒（含桥尖等附属悬出） */
+  let framedBounds: THREE.Box3 = viewBounds
+  fitCameraTo(campusBounds, framedBounds, camera, container)
+  controls.target.copy(framedBounds.getCenter(new THREE.Vector3()))
   controls.update()
+  // 用户一旦手动转/缩放相机，就绪后的真值对中飞行作废（不打断用户构图）
+  let userOrbited = false
+  controls.addEventListener('start', () => {
+    userOrbited = true
+  })
 
   // ---- 渲染循环 ----
   let raf = 0
@@ -111,8 +120,10 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   const growQueue: { holder: THREE.Group; startAt: number }[] = []
   /** smootherstep 缓动（福永同款） */
   const smootherstep = (t: number) => t * t * t * (t * (t * 6 - 15) + 10)
-  const GROW_DURATION = 480
-  const GROW_STAGGER = 50
+  const GROW_DURATION = 650
+  const GROW_STAGGER = 90
+  /** 地面先出现、定一拍再起楼（2026-11-19：首帧即全景后，楼和地同出会显得动画一闪而过） */
+  const GROW_DELAY = 350
   /** 相机飞行（点楼聚焦/返回全景）：每帧插值比例与时长 */
   const FLY_STEP = 0.09
 
@@ -177,7 +188,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     renderer.render(scene, camera)
     raf = requestAnimationFrame(tick)
   }
-  raf = requestAnimationFrame(tick)
+  // 渲染循环不在此启动：等楼栋全部加载、相机按真实包围盒就位后再开（见加载 IIFE 尾部）——
+  // 首帧即最终构图，消灭「加载完镜头再挪一帧」的跳变（2026-11-19 用户拍板）
 
   const onResize = () => {
     const w = container.clientWidth
@@ -280,8 +292,6 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       cb.onProgress?.(done, buildings.length)
     }
     if (disposed) return
-    const t0 = performance.now()
-    grown.forEach((holder, i) => growQueue.push({ holder, startAt: t0 + i * GROW_STAGGER }))
     // 楼名标签（建好即回填 kWh 时序差：§2.1 可能先于加载完成到达）
     for (const cfg of buildings) {
       if (buildingRoots.has(cfg.id)) {
@@ -295,6 +305,28 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     }
     // 告警亮灯回放（§3.1 首拉可能先于楼栋加载完成）
     if (pendingAlarms) applyAlarms(pendingAlarms)
+    // 真值对中：配置估算盒量不到附属悬出（综合楼桥尖东伸 ~25m，画面中心偏西、
+    // 左右留空不对称）——按真实渲染盒一次就位。此刻尚未开渲染循环，用户看到的
+    // 一直是进度条+底色，不存在任何画面跳变；用户已手动转相机则不摆（userOrbited）
+    const trueBounds = new THREE.Box3()
+    for (const b of buildingBoxes.values()) trueBounds.union(b)
+    if (!trueBounds.isEmpty()) {
+      framedBounds = trueBounds
+      if (!userOrbited) {
+        const { pos, tg } = computeFit(campusBounds, trueBounds, CAMPUS_FORWARD)
+        camera.position.copy(pos)
+        controls.target.copy(tg)
+        camera.lookAt(tg)
+      }
+    }
+    // 预编译着色器：渲染循环延迟启动后，首帧编译可达数百毫秒，若落在生长动画
+    // 计时内会把动画"吃掉"（编译返回时 t 已过半、楼近乎直接满高出现）。
+    // 先编译再起表，生长从 t=0 完整播放
+    renderer.compile(scene, camera)
+    const t0 = performance.now()
+    grown.forEach((holder, i) => growQueue.push({ holder, startAt: t0 + GROW_DELAY + i * GROW_STAGGER }))
+    // 相机就位后才开渲染循环：首帧即最终构图
+    raf = requestAnimationFrame(tick)
     cb.onReady?.()
   })()
 
@@ -429,17 +461,24 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   renderer.domElement.addEventListener('pointerdown', onPointerDown)
   renderer.domElement.addEventListener('pointerup', onPointerUp)
 
-  /** 单楼/园区取景机位：目标居中放大取景（dir = 从相机看向目标的方向，缺省全场南向） */
-  function computeFit(box: THREE.Box3, dir: THREE.Vector3): { pos: THREE.Vector3; tg: THREE.Vector3 } {
-    const target = box.getCenter(new THREE.Vector3())
-    const size = box.getSize(new THREE.Vector3())
+  /** 取景机位：距离按 distBox 算（聚焦=单楼、全景=核心楼群，独立地块不推远相机），
+   *  目标中心与最小带宽按 targetBox（全景传全部楼栋：行政楼完整入画，带宽不足按
+   *  10% 余量补距离，最东端附属允许被面板遮挡）。dir = 从相机看向目标的方向 */
+  function computeFit(distBox: THREE.Box3, targetBox: THREE.Box3, dir: THREE.Vector3): { pos: THREE.Vector3; tg: THREE.Vector3 } {
+    const target = targetBox.getCenter(new THREE.Vector3())
+    const size = distBox.getSize(new THREE.Vector3())
     const fovRad = THREE.MathUtils.degToRad(camera.fov)
     const W = Math.max(container.clientWidth, 1)
     const usableW = Math.max(W - SIDE_PANEL_PX * 2, W * 0.3)
     const hFov = 2 * Math.atan(Math.tan(fovRad / 2) * (usableW / W) * camera.aspect)
     const vDist = (Math.max(size.y, size.x * 0.7) / 2 / Math.tan(fovRad / 2)) * 1.35
     const hDist = (size.x / 2 / Math.tan(hFov / 2)) * 1.35
-    const dist = Math.max(vDist, hDist, 40)
+    const dist = Math.max(
+      vDist,
+      hDist,
+      40,
+      (targetBox.getSize(new THREE.Vector3()).x / 2 / Math.tan(hFov / 2)) * 1.1,
+    )
     const pos = target.clone().addScaledVector(dir, -dist)
     return { pos, tg: target }
   }
@@ -457,7 +496,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     const dir = cfg?.focusDir
       ? new THREE.Vector3(...cfg.focusDir).normalize()
       : CAMPUS_FORWARD
-    const { pos, tg } = computeFit(box, dir)
+    const { pos, tg } = computeFit(box, box, dir)
     flyTo(pos, tg)
   }
 
@@ -465,7 +504,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   function backToCampus() {
     focusedId = null
     for (const r of buildingRoots.values()) r.visible = true
-    const { pos, tg } = computeFit(campusBounds, CAMPUS_FORWARD)
+    const { pos, tg } = computeFit(campusBounds, framedBounds, CAMPUS_FORWARD)
     flyTo(pos, tg)
   }
 
@@ -540,10 +579,11 @@ function boundsFromConfig(buildings: CampusBuildingConfig[]): THREE.Box3 {
   return box
 }
 
-/** 取景：楼群落在两侧面板之间的中央带（safeHalf 思路，福永 viewSafeHalf 简化版） */
-function fitCameraTo(box: THREE.Box3, camera: THREE.PerspectiveCamera, container: HTMLElement) {
-  const target = box.getCenter(new THREE.Vector3())
-  const size = box.getSize(new THREE.Vector3())
+/** 初始全景机位（与 computeFit 同规则，直接摆位不飞行）：距离按核心楼群、
+ *  中心对齐全部楼栋并保证全部楼栋主体入画（带宽 10% 余量） */
+function fitCameraTo(distBox: THREE.Box3, targetBox: THREE.Box3, camera: THREE.PerspectiveCamera, container: HTMLElement) {
+  const target = targetBox.getCenter(new THREE.Vector3())
+  const size = distBox.getSize(new THREE.Vector3())
   const fovRad = THREE.MathUtils.degToRad(camera.fov)
   // 有效横向视场：画面宽减去两侧面板占位后再算水平 fov
   const W = Math.max(container.clientWidth, 1)
@@ -551,7 +591,12 @@ function fitCameraTo(box: THREE.Box3, camera: THREE.PerspectiveCamera, container
   const hFov = 2 * Math.atan(Math.tan(fovRad / 2) * (usableW / W) * camera.aspect)
   const vDist = (Math.max(size.y, size.x * 0.7) / 2 / Math.tan(fovRad / 2)) * 1.35
   const hDist = (size.x / 2 / Math.tan(hFov / 2)) * 1.35
-  const dist = Math.max(vDist, hDist, 60)
+  const dist = Math.max(
+    vDist,
+    hDist,
+    60,
+    (targetBox.getSize(new THREE.Vector3()).x / 2 / Math.tan(hFov / 2)) * 1.1,
+  )
   camera.position.copy(target).addScaledVector(CAMPUS_FORWARD, -dist)
   camera.lookAt(target)
 }

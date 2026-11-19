@@ -51,21 +51,32 @@ export function loadBuilding(cfg: CampusBuildingConfig): Promise<LoadedBuilding 
 }
 
 function normalize(src: THREE.Object3D, cfg: CampusBuildingConfig): LoadedBuilding {
+  // 0) 剔除建模附带物（excludeNodes 子串命中）：必须在取包围盒前，否则悬空件撑大盒把楼算小
+  if (cfg.excludeNodes?.length) {
+    const doomed: THREE.Object3D[] = []
+    src.traverse((o) => {
+      if (o.name && cfg.excludeNodes!.some((p) => o.name.includes(p))) doomed.push(o)
+    })
+    for (const o of doomed) o.removeFromParent()
+  }
+
   // 1) 底面对角归一 + 高度同比例（scale 烘内层：外层留给摆位/动画）
   const raw = new THREE.Box3().setFromObject(src)
   const size = raw.getSize(new THREE.Vector3())
   const diag = Math.hypot(size.x, size.z)
   const scale = diag > 0 ? cfg.targetFoot / diag : 1
+  // heightScale：换模版高宽比失真时 y 独立拔高（如宿舍楼新模版偏矮）
+  const hs = cfg.heightScale ?? 1
   const inner = new THREE.Group()
-  inner.scale.setScalar(scale)
+  inner.scale.set(scale, scale * hs, scale)
   inner.add(src)
 
-  // 2) 居中 x/z + 落地 y=0（缩放后的世界盒）
+  // 2) 居中 x/z + 落地 y=0（缩放后的世界盒；y 落地除数含 hs）
   const box = new THREE.Box3().setFromObject(inner)
   const center = box.getCenter(new THREE.Vector3())
   src.position.x -= center.x / scale
   src.position.z -= center.z / scale
-  src.position.y -= box.min.y / scale
+  src.position.y -= box.min.y / (scale * hs)
 
   // 3) 摆位外层
   const holder = new THREE.Group()
