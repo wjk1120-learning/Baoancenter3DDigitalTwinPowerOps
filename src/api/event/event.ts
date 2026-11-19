@@ -215,21 +215,40 @@ export async function fetchDeviceEventCount(deviceId: number): Promise<number> {
 }
 
 /** §3.7 楼栋当前告警数（GET /event/buildings/{buildingId}/current-count → Long；
- *  该楼全部测点设备未处理（handle_status=0）告警数，无设备/无告警返回 0）。
- *  医院总览 3D 楼栋信息卡「当前预警」数据源。 */
-export async function fetchBuildingCurrentAlarmCount(buildingId: number): Promise<number> {
+ *  该楼全部测点设备未处理（handle_status=0）告警数，无设备/无告警返回 0。
+ *  floor 可选：按楼层筛选（G/数字/负数，契约口径；不传 = 整栋）。
+ *  医院总览 3D 楼栋/楼层信息卡「当前预警」数据源。 */
+export async function fetchBuildingCurrentAlarmCount(buildingId: number, floor?: string): Promise<number> {
   if (!buildingId) return 0
-  const data = await eventGet<unknown>(`/event/buildings/${buildingId}/current-count`)
+  const q = floor ? `?floor=${encodeURIComponent(floor)}` : ''
+  const data = await eventGet<unknown>(`/event/buildings/${buildingId}/current-count${q}`)
   return Number(data) || 0
 }
 
 /** §3.8 楼栋近 7 日每日告警数（GET /event/buildings/{buildingId}/daily-counts；
  *  2026-11-18 后端口径变更：不含今天，截至昨日共 7 个完整日、无告警日补 0、按日期升序，
- *  全部事件口径）。医院总览 3D 楼栋信息卡「近 7 日每日预警」趋势数据源。 */
-export async function fetchBuildingDailyAlarms(buildingId: number): Promise<BuildingDailyAlarm[]> {
+ *  全部事件口径；floor 可选，口径同 §3.7）。
+ *  医院总览 3D 楼栋/楼层信息卡「近 7 日每日预警」趋势数据源。 */
+export async function fetchBuildingDailyAlarms(buildingId: number, floor?: string): Promise<BuildingDailyAlarm[]> {
   if (!buildingId) return []
-  const data = await eventGet<BuildingDailyAlarm[]>(`/event/buildings/${buildingId}/daily-counts`)
+  const q = floor ? `?floor=${encodeURIComponent(floor)}` : ''
+  const data = await eventGet<BuildingDailyAlarm[]>(`/event/buildings/${buildingId}/daily-counts${q}`)
   return Array.isArray(data) ? data : []
+}
+
+/** §3.11 查询未处理事件列表（GET /event/unhandled：全量未处理 handle_status=0，
+ *  ts_ms 降序，结构同 §3.1 EventBrief，不限今日）。
+ *  3D 园区告警链统一数据源——楼层亮灯/选择器染色/预警看板明细共用，「未处理=活着=亮灯」
+ *  口径（2026-11-19 拍板；替代 §3.1 在 3D 链路的位置，昨日未处理同样可见）。 */
+export async function fetchUnhandledEvents(): Promise<AlertItem[]> {
+  const data = await eventGet<EventBrief[] | null>('/event/unhandled')
+  const items: AlertItem[] = []
+  for (const raw of Array.isArray(data) ? data : []) {
+    const brief = coerceEventBrief(raw)
+    const info = brief ? briefToEventInfo(brief) : coerceEventInfo(raw)
+    if (info) items.push(mapEventInfoToAlert(info))
+  }
+  return items
 }
 
 /** §3.5 箱柜分等级历史告警统计（失败降级全 0，弹窗头不阻断） */

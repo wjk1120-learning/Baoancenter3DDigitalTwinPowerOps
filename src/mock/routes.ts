@@ -1,5 +1,10 @@
 import type { EventBrief } from '../api/event/types'
-import { eventRows, getBuildingCurrentAlarmCount, getBuildingDailyAlarms } from './data/event'
+import {
+  eventRows,
+  getBuildingCurrentAlarmCount,
+  getBuildingDailyAlarms,
+  mockTodayStr,
+} from './data/event'
 import {
   addMockCamera,
   cameraRows,
@@ -14,6 +19,8 @@ import {
   getDeviceDailyStats,
   getEnergyToday,
   getEnergyYesterday,
+  getFloorEnergyHistory,
+  getFloorStats,
   getParamCurve,
 } from './data/energy'
 import { getCetDataTypes } from './data/configuration'
@@ -67,8 +74,20 @@ function route(key: string, handler: (ctx: MockCallContext) => unknown): MockRou
  * 未登记的接口 = 页面拿到空信封（见 mockAdapter），缺口随阶段 4 页面逐个补。
  */
 const routes: MockRoute[] = [
-  // §3.1 今日告警（v5.9.2 起契约取消分页：List<EventBrief> 直返，按时间倒序）
-  route('GET /event/today', () => [...eventRows].sort((a, b) => b.timeStr.localeCompare(a.timeStr))),
+  // §3.1 今日告警（v5.9.2 起契约取消分页：List<EventBrief> 直返，按时间倒序）。
+  // eventRows 含跨日未处理样本（§3.11 用）——今日接口只回今日行（timeStr 日期 = 今天）
+  route('GET /event/today', () =>
+    [...eventRows]
+      .filter((e) => e.timeStr.slice(0, 10) === mockTodayStr())
+      .sort((a, b) => b.timeStr.localeCompare(a.timeStr)),
+  ),
+
+  // §3.11 未处理事件列表（全量 handle_status=0，不限今日，时间倒序；3D 告警链数据源）
+  route('GET /event/unhandled', () =>
+    [...eventRows]
+      .filter((e) => e.handleStatus === 0)
+      .sort((a, b) => b.timeStr.localeCompare(a.timeStr)),
+  ),
 
   // 3.2 按设备聚合（?level= 过滤，缺省全量；组内 events 即 EventBrief 列表）
   route('GET /event/grouped', ({ query }) => {
@@ -91,23 +110,36 @@ const routes: MockRoute[] = [
   }),
 
   // 3.4 分级统计（从同一份数据实时汇总）
-  // §3.7 楼栋当前告警数（3D 信息卡）
-  route('GET /event/buildings/:buildingId/current-count', ({ params }) =>
-    getBuildingCurrentAlarmCount(Number(params.buildingId)),
+  // §3.7 楼栋当前告警数（3D 楼栋/楼层信息卡；floor 可选按楼层筛选）
+  route('GET /event/buildings/:buildingId/current-count', ({ params, query }) =>
+    getBuildingCurrentAlarmCount(Number(params.buildingId), query.floor || undefined),
   ),
-  // §3.8 楼栋近 7 日每日告警数（3D 信息卡趋势）
-  route('GET /event/buildings/:buildingId/daily-counts', ({ params }) =>
-    getBuildingDailyAlarms(Number(params.buildingId)),
+  // §3.8 楼栋近 7 日每日告警数（3D 信息卡趋势；floor 可选参与种子）
+  route('GET /event/buildings/:buildingId/daily-counts', ({ params, query }) =>
+    getBuildingDailyAlarms(Number(params.buildingId), query.floor || undefined),
   ),
   // §2.3 分楼栋近 7 日历史能耗（3D 信息卡趋势）
   route('GET /energy/buildings/history', ({ query }) => getBuildingEnergyHistory(query)),
+  // §2.6/§2.7/§2.8 楼层能耗（3D 楼层信息卡；6 段参数路由与 3 段 history 字面路由无冲突）
+  route('GET /energy/buildings/:buildingId/floors/:floor/device-stats', ({ params }) =>
+    getFloorStats(Number(params.buildingId), params.floor ?? '1', false),
+  ),
+  route('GET /energy/buildings/:buildingId/floors/:floor/today-device-stats', ({ params }) =>
+    getFloorStats(Number(params.buildingId), params.floor ?? '1', true),
+  ),
+  route('GET /energy/buildings/:buildingId/floors/:floor/history', ({ params }) =>
+    getFloorEnergyHistory(Number(params.buildingId), params.floor ?? '1'),
+  ),
+  // §3.6 告警统计：totalAlarmCount=全量、todayAlarmCount=今日（eventRows 含跨日样本，两者分离）
   route('GET /event/stats', () => {
+    const today = mockTodayStr()
     const total = eventRows.length
+    const todayRows = eventRows.filter((e) => e.timeStr.slice(0, 10) === today)
     const unhandled = eventRows.filter((e) => e.handleStatus === 0).length
     const by = (lv: number) => eventRows.filter((e) => e.eventLevel === lv).length
     return {
       totalAlarmCount: total,
-      todayAlarmCount: total,
+      todayAlarmCount: todayRows.length,
       unhandledAlarmCount: unhandled,
       handleRate: total > 0 ? Math.round(((total - unhandled) / total) * 10000) / 100 : 100,
       urgentCount: by(1),
@@ -117,13 +149,15 @@ const routes: MockRoute[] = [
     }
   }),
 
-  // 3.10 标记事件已处理（改数据数组，stats/grouped 联动）。
-  // 文档语义：真实后端会级联处理同箱柜全部未处理事件（§3.10）；mock 数据无箱柜关联字段，
-  // 仅翻当前事件——联调切真后以真后端级联结果为准
+  // §3.10 标记事件已处理（改数据数组，stats/grouped/unhandled 联动）。
+  // 级联语义（§3.10 契约：同箱柜全部未处理一并置 1）mock 近似 = 同 deviceName（柜名）
+  // 的未处理事件一并翻已处理——切真后以真后端级联结果为准
   route('POST /event/:eventId/handle', ({ params }) => {
     const hit = eventRows.find((e) => e.eventId === params.eventId)
     if (!hit) return false
-    hit.handleStatus = 1
+    for (const e of eventRows) {
+      if (e.deviceName === hit.deviceName && e.handleStatus === 0) e.handleStatus = 1
+    }
     return true
   }),
 

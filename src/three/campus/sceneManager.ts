@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { floorKeyOfNode } from './buildings'
 import type { CampusBuildingConfig } from './buildings'
 import type { CampusLayout } from '../../config/campusConfig'
 import { loadBuilding } from './glbLoader'
@@ -26,13 +27,26 @@ const SIDE_PANEL_PX = 430
 /** 主光位置 = 太阳方向 × 距离（福永 CAMPUS_KEY_LIGHT_POS 同款派生） */
 const KEY_LIGHT_POS = CAMPUS_SUN_DIR.clone().multiplyScalar(CAMPUS_SUN_DIST)
 
+export interface FloorAlarmAnchor {
+  buildingId: number
+  floorKey: string
+  /** 告警等级（1 紧急 / 2 严重；同层多条取更高） */
+  level: number
+  /** 屏幕坐标（container 布局尺寸系——规避 App transform:scale 的 rect 缩放差） */
+  x: number
+  y: number
+  /** 锚点在屏幕左/右半（引线卡往反侧伸，避免遮楼） */
+  side: 'left' | 'right'
+}
+
 export interface CampusSceneCallbacks {
   /** 加载进度（done 含失败栋） */
   onProgress?: (done: number, total: number) => void
   /** 全部楼栋处理完（含失败）后一次性回调 */
   onReady?: () => void
-  /** 点楼/点空白（按下抬起位移 <6px 判点击；空白=kind background） */
-  onPick?: (pick: { kind: 'building' | 'background'; buildingId?: number }) => void
+  /** 点楼/点层/点空白（按下抬起位移 <6px 判点击；空白=kind background；
+   *  kind floor=楼栋聚焦态命中当前楼的某层，floor=契约楼层键） */
+  onPick?: (pick: { kind: 'building' | 'floor' | 'background'; buildingId?: number; floor?: string }) => void
 }
 
 export interface CampusSceneOptions extends CampusSceneCallbacks {
@@ -169,6 +183,14 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       for (const info of alarmMeshes.values()) {
         const cloned = info.cloned as THREE.MeshStandardMaterial
         if (cloned.emissive) cloned.emissiveIntensity = breath
+      }
+    }
+    // 楼层聚焦蓝脉冲（选中层克隆材质，主题蓝呼吸）
+    if (floorFocusMats.size) {
+      const breath = 0.3 + 0.3 * Math.abs(Math.sin(now / 500))
+      for (const info of floorFocusMats.values()) {
+        const std = info.cloned as THREE.MeshStandardMaterial
+        if (std.emissive) std.emissiveIntensity = breath
       }
     }
     // 楼名标签跟随投影
@@ -340,6 +362,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     renderer.domElement.removeEventListener('pointerdown', onPointerDown)
     renderer.domElement.removeEventListener('pointerup', onPointerUp)
     controls.dispose()
+    clearFloorFocusVisual()
     // 环境件释放（天空穹顶着色器材质 / 地面组全部几何与材质；纹理模块级缓存不拆）
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -453,6 +476,14 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
 
   const onPointerUp = (ev: PointerEvent) => {
     if (disposed || Math.hypot(ev.clientX - downX, ev.clientY - downY) >= 6) return
+    // 楼栋聚焦态先试楼层拾取（命中当前楼的某层 → 楼层点击）；未命中层再走楼/空白
+    if (focusedId != null) {
+      const fl = pickFloorAt(ev.clientX, ev.clientY)
+      if (fl) {
+        cb.onPick?.({ kind: 'floor', buildingId: fl.buildingId, floor: fl.floor })
+        return
+      }
+    }
     const id = pickBuildingAt(ev.clientX, ev.clientY)
     cb.onPick?.(id != null ? { kind: 'building', buildingId: id } : { kind: 'background' })
   }
@@ -489,6 +520,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     const root = buildingRoots.get(id)
     const box = buildingBoxes.get(id)
     if (!root || !box) return
+    clearFloorFocusVisual()
+    focusedFloor = null
     focusedId = id
     setHover(null)
     for (const [bid, r] of buildingRoots) r.visible = bid === id
@@ -502,10 +535,194 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
 
   /** 返回全景：恢复全部楼栋 + 相机飞回初始机位 */
   function backToCampus() {
+    clearFloorFocusVisual()
+    focusedFloor = null
     focusedId = null
     for (const r of buildingRoots.values()) r.visible = true
     const { pos, tg } = computeFit(campusBounds, framedBounds, CAMPUS_FORWARD)
     flyTo(pos, tg)
+  }
+
+  // ---- 楼层交互（二期批1）：楼层清单 / 楼层聚焦（下钻）/ 楼层拾取 / 告警锚点 ----
+
+  /** 楼层聚焦视觉参数：pop 横向放大系数 / 其余层压暗系数 / 选中层主题蓝 */
+  const FLOOR_POP_SCALE = 1.06
+  const FLOOR_DIM = 0.42
+  const FLOOR_FOCUS_EMISSIVE = 0x2b7ce3
+  /** 选中层克隆材质（mesh → 原材质），退出时还原+dispose 克隆 */
+  const floorFocusMats = new Map<THREE.Mesh, { orig: THREE.Material; cloned: THREE.Material }>()
+  /** 压暗原色表（按材质记录——GLB 共享材质坑同 hover：按 mesh 记会把改色当原色） */
+  const dimmedOrig = new Map<THREE.Material, { color: number; emissive: number; intensity: number }>()
+  /** pop 前 scale（退出还原） */
+  const popOrig = new Map<THREE.Object3D, THREE.Vector3>()
+  /** 告警楼层去重等级表："{buildingId}|{floorKey}" → level（同层多条取更高=数值更小）。
+   *  引线卡锚点（getFloorAlarmAnchors）按楼层取点用 */
+  const alarmFloorLevels = new Map<string, number>()
+  /** 当前聚焦楼层（契约键；null = 楼栋聚焦态未选层） */
+  let focusedFloor: string | null = null
+
+  /** 楼层键清单（升序 B<G<正数；来自 GLB 楼层节点解析，无节点层不出现——
+   *  六栋无 GF，floor "G" 不在列；地下层等 _under 接入后自然出现） */
+  function getFloors(buildingId: number): string[] {
+    const m = buildingFloors.get(buildingId)
+    if (!m) return []
+    const order = (f: string) => (f === 'G' ? 0 : Number(f))
+    return [...m.keys()].sort((a, b) => order(a) - order(b))
+  }
+
+  /** 还原楼层聚焦的全部视觉（克隆材质/压暗色/pop scale） */
+  function clearFloorFocusVisual() {
+    for (const [mesh, info] of floorFocusMats) {
+      mesh.material = info.orig
+      info.cloned.dispose()
+    }
+    floorFocusMats.clear()
+    for (const [mat, orig] of dimmedOrig) {
+      const std = mat as THREE.MeshStandardMaterial
+      std.color.setHex(orig.color)
+      std.emissive.setHex(orig.emissive)
+      std.emissiveIntensity = orig.intensity
+    }
+    dimmedOrig.clear()
+    for (const [obj, s] of popOrig) obj.scale.copy(s)
+    popOrig.clear()
+  }
+
+  /** 压暗整楼非选中层（幂等：已记录材质跳过；告警层克隆材质不压——保持红橙呼吸）。
+   *  applyAlarms 在聚焦期间刷新后，新亮告警层的体色已按原色表还原，无需重压。 */
+  function dimBuildingExcept(selected: THREE.Object3D) {
+    const root = focusedId != null ? buildingRoots.get(focusedId) : null
+    if (!root) return
+    const inSelected = (o: THREE.Object3D) => {
+      let p: THREE.Object3D | null = o
+      while (p) {
+        if (p === selected) return true
+        p = p.parent
+      }
+      return false
+    }
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (!mesh.isMesh || inSelected(mesh) || alarmMeshes.has(mesh)) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const m of mats) {
+        const std = m as THREE.MeshStandardMaterial
+        if (!std.emissive || dimmedOrig.has(m)) continue
+        dimmedOrig.set(m, {
+          color: std.color.getHex(),
+          emissive: std.emissive.getHex(),
+          intensity: std.emissiveIntensity,
+        })
+        std.color.multiplyScalar(FLOOR_DIM)
+        std.emissive.setHex(0x000000)
+        std.emissiveIntensity = 0
+      }
+    })
+  }
+
+  /** 楼层聚焦视觉三件套：选中层克隆材质蓝脉冲 + 横向 pop（y 锁死）+ 其余层压暗 */
+  function applyFloorFocus(node: THREE.Object3D) {
+    clearFloorFocusVisual()
+    popOrig.set(node, node.scale.clone())
+    node.scale.x *= FLOOR_POP_SCALE
+    node.scale.z *= FLOOR_POP_SCALE
+    node.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      // 告警亮灯层的克隆材质不参与（红/橙呼吸不被蓝光覆盖）
+      if (!mesh.isMesh || alarmMeshes.has(mesh)) return
+      const orig = mesh.material as THREE.Material
+      const cloned = orig.clone()
+      mesh.material = cloned
+      floorFocusMats.set(mesh, { orig, cloned })
+      const std = cloned as THREE.MeshStandardMaterial
+      if (std.emissive) {
+        std.emissive.setHex(FLOOR_FOCUS_EMISSIVE)
+        std.emissiveIntensity = 0.5
+      }
+    })
+    dimBuildingExcept(node)
+  }
+
+  /** 聚焦楼层（楼栋聚焦态的子状态）：相机飞至该层包围盒 + 楼层聚焦视觉。
+   *  楼层行清单来自 getFloors（GLB 实际节点）；页面负责信息卡/看板切换。 */
+  function focusFloor(buildingId: number, floorKey: string) {
+    const node = buildingFloors.get(buildingId)?.get(floorKey)
+    if (!node) return
+    focusedId = buildingId
+    focusedFloor = floorKey
+    setHover(null)
+    for (const [bid, r] of buildingRoots) r.visible = bid === buildingId
+    applyFloorFocus(node)
+    const box = new THREE.Box3().setFromObject(node)
+    const { pos, tg } = computeFit(box, box, CAMPUS_FORWARD)
+    flyTo(pos, tg)
+  }
+
+  /** 退出楼层聚焦回楼栋聚焦：还原楼层视觉 + 相机飞回楼栋机位（楼层态的一级返回
+   *  直接回全景走 backToCampus，本方法供「层间对比」等中间态使用） */
+  function backToBuilding() {
+    if (focusedFloor == null || focusedId == null) return
+    clearFloorFocusVisual()
+    focusedFloor = null
+    const box = buildingBoxes.get(focusedId)
+    if (!box) return
+    const cfg = buildings.find((b) => b.id === focusedId)
+    const dir = cfg?.focusDir ? new THREE.Vector3(...cfg.focusDir).normalize() : CAMPUS_FORWARD
+    const { pos, tg } = computeFit(box, box, dir)
+    flyTo(pos, tg)
+  }
+
+  /** 楼层拾取（楼栋聚焦态专用）：三角级 raycast 命中后沿父链找楼层节点名。
+   *  命中楼但无楼层节点（屋顶/附属/非层 mesh）返回 null——调用方按整楼处理。 */
+  function pickFloorAt(clientX: number, clientY: number): { buildingId: number; floor: string } | null {
+    const rect = renderer.domElement.getBoundingClientRect()
+    pointerNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    raycaster.setFromCamera(pointerNdc, camera)
+    const roots = [...buildingRoots.entries()].filter(([, r]) => r.visible).map(([, r]) => r)
+    const hits = raycaster.intersectObjects(roots, true)
+    for (const h of hits) {
+      let floorKey: string | null = null
+      let p: THREE.Object3D | null = h.object
+      while (p) {
+        if (floorKey == null && p.name) {
+          const k = floorKeyOfNode(p.name)
+          if (k != null) floorKey = k
+        }
+        if (p.userData.buildingId != null) {
+          return floorKey != null
+            ? { buildingId: p.userData.buildingId as number, floor: floorKey }
+            : null
+        }
+        p = p.parent
+      }
+    }
+    return null
+  }
+
+  /** 告警楼层引线卡锚点（全景可见楼层；每次调用现算投影——层数量小，供页面轮询渲染卡） */
+  function getFloorAlarmAnchors(): FloorAlarmAnchor[] {
+    const out: FloorAlarmAnchor[] = []
+    if (!alarmFloorLevels.size) return out
+    const W = Math.max(container.clientWidth, 1)
+    const H = Math.max(container.clientHeight, 1)
+    for (const [key, level] of alarmFloorLevels) {
+      const sep = key.indexOf('|')
+      const bid = Number(key.slice(0, sep))
+      const floorKey = key.slice(sep + 1)
+      const root = buildingRoots.get(bid)
+      const node = buildingFloors.get(bid)?.get(floorKey)
+      if (!root || !node || !root.visible) continue
+      const c = new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3())
+      v3.copy(c).project(camera)
+      if (v3.z > 1) continue
+      const x = (v3.x * 0.5 + 0.5) * W
+      const y = (-v3.y * 0.5 + 0.5) * H
+      out.push({ buildingId: bid, floorKey, level, x, y, side: x < W / 2 ? 'left' : 'right' })
+    }
+    return out
   }
 
   // ---- 数据联动（批3）：楼名标签 kWh + 告警楼层亮灯 ----
@@ -536,7 +753,11 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       info.cloned.dispose()
     }
     alarmMeshes.clear()
+    alarmFloorLevels.clear()
     for (const a of alarms) {
+      const key = `${a.buildingId}|${a.floorKey}`
+      const prev = alarmFloorLevels.get(key)
+      alarmFloorLevels.set(key, prev == null ? a.level : Math.min(prev, a.level))
       const node = buildingFloors.get(a.buildingId)?.get(a.floorKey)
       if (!node) continue
       node.traverse((o) => {
@@ -551,6 +772,9 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
           std.emissive.setHex(a.level === 1 ? 0xe53e3e : 0xed8936)
           std.emissiveIntensity = 0.6
         }
+        // 楼层聚焦压暗后新亮的告警层：克隆继承的是压暗体色，按原色表还原
+        const o2 = dimmedOrig.get(orig)
+        if (o2) std.color.setHex(o2.color)
       })
     }
   }
@@ -560,6 +784,11 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     scene,
     focusBuilding,
     backToCampus,
+    /** 楼层能力（二期批1） */
+    getFloors,
+    focusFloor,
+    backToBuilding,
+    getFloorAlarmAnchors,
     setBuildingEnergy,
     setBuildingAlarms,
   }

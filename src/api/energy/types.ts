@@ -1,4 +1,4 @@
-/** docs/FY-Hospital-API.md 能耗管理模块（§2.1/§2.2/§2.4/§2.9） */
+/** docs/FY-Hospital-API.md 能耗管理模块（§2.1/§2.2/§2.4/§2.6-2.8/§2.9） */
 
 /** §2.1 BuildingStat（分楼栋统计值） */
 export interface EnergyBuildingStat {
@@ -42,6 +42,34 @@ export interface EnergyDailyStats {
   deviceCount: number
   /** 更新时间 */
   updatedAt: string
+}
+
+/** §2.6/§2.7 FloorStats（指定楼层能耗合计，昨日/今日同构） */
+export interface FloorStats {
+  buildingId: number
+  /** 楼层，取值 G/数字/负数（同 §3.7 口径） */
+  floor: string
+  /** 楼层合计用电量（kWh）；§2.7 全部设备无读数时为 null（区分「无设备=0」） */
+  energyKwh: number | null
+  /** 楼层合计碳排放（kg）；null 口径同 energyKwh */
+  carbonKg: number | null
+  /** 楼层映射设备总数 */
+  deviceTotal: number
+  /** 计入合计的设备数（< deviceTotal = 有设备缺记录） */
+  deviceValid: number
+}
+
+/** §2.8 FloorDailyEnergy（指定楼层近 7 日逐日能耗行；仅返回有数据日期，不补 null） */
+export interface FloorDailyEnergy {
+  day: string
+  buildingId: number
+  floor: string
+  energyKwh: number
+  carbonKg: number
+  /** 当日有能耗记录的设备数 */
+  deviceCount: number
+  /** 楼层映射设备总数 */
+  deviceTotal: number
 }
 
 /** §2.4 DeviceDailyEnergy（按设备查询近 30 天每日能耗行） */

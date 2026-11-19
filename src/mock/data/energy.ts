@@ -6,7 +6,14 @@
  * §2.9 设备电能参数曲线：镜像 CET ReadDatalog 结构，医院负荷形态 + 确定性噪声。
  */
 
-import type { EnergyBuildingStat, EnergyDailyStats, EnergyTodayStats, ParamCurve } from '../../api/energy/types'
+import type {
+  EnergyBuildingStat,
+  EnergyDailyStats,
+  EnergyTodayStats,
+  FloorDailyEnergy,
+  FloorStats,
+  ParamCurve,
+} from '../../api/energy/types'
 import { buildings } from './device'
 
 export interface MockEnergyDay {
@@ -143,6 +150,68 @@ export function getBuildingEnergyHistory(query: { buildingId?: string }): Energy
       deviceCount: DEVICES_BY_BUILDING[b.buildingName] ?? 0,
       updatedAt: `${fmtDay(d)}T00:30:00`,
     } as EnergyDailyStats)
+  }
+  return out
+}
+
+/** 楼层确定性伪随机（同楼同层同盐刷新不变，0~232） */
+function floorSeed(bid: number, floorNum: number, salt: number): number {
+  return ((bid * 131 + floorNum * 17 + salt * 7) * 9301 + 49297) % 233
+}
+
+/**
+ * §2.6/§2.7 楼层能耗合计（3D 楼层信息卡；today=false 昨日 / true 今日）。
+ * 样本设计（mock 口径演示契约特殊值）：
+ *  - 行政楼 4 层（5/4）：无设备 → 合计 0、deviceTotal=0（「无设备=0」）
+ *  - 宿舍楼 5 层（6/5）仅今日：全部设备无读数 → energyKwh=null（§2.7 区分「无设备=0」）
+ *  - 其余楼层：楼栋值 × 楼层权重（低层高、高层低）× 确定性波动；部分层 deviceValid<deviceTotal
+ */
+export function getFloorStats(buildingId: number, floor: string, today: boolean): FloorStats {
+  const b = buildings.find((x) => x.id === buildingId)
+  const floorNum = floor === 'G' ? 0 : Number(floor) || 0
+  const noDevice = buildingId === 5 && floor === '4'
+  const allInvalid = today && buildingId === 6 && floor === '5'
+  const deviceTotal = noDevice ? 0 : 1 + (floorSeed(buildingId, floorNum, 1) % 4)
+  const base = (b ? TODAY_BY_BUILDING[b.buildingName] ?? 0 : 0) * (today ? 1 : 0.9)
+  const wobble = 0.06 + floorSeed(buildingId, floorNum, today ? 2 : 3) / 233 / 2
+  const kwh: number | null = noDevice ? 0 : allInvalid ? null : round2(base * wobble)
+  const deviceValid = noDevice
+    ? 0
+    : allInvalid
+      ? 0
+      : Math.max(0, deviceTotal - (floorSeed(buildingId, floorNum, 4) % 2))
+  return {
+    buildingId,
+    floor,
+    energyKwh: kwh,
+    carbonKg: kwh == null ? null : round2(kwh * CARBON_FACTOR),
+    deviceTotal,
+    deviceValid,
+  }
+}
+
+/** §2.8 楼层近 7 日能耗（截至昨日 7 个完整日升序；仅返回有数据日期——无设备层返回空数组） */
+export function getFloorEnergyHistory(buildingId: number, floor: string): FloorDailyEnergy[] {
+  const b = buildings.find((x) => x.id === buildingId)
+  const floorNum = floor === 'G' ? 0 : Number(floor) || 0
+  if (!b || (buildingId === 5 && floor === '4')) return []
+  const base = (TODAY_BY_BUILDING[b.buildingName] ?? 0) * 0.9
+  const deviceTotal = 1 + (floorSeed(buildingId, floorNum, 1) % 4)
+  const out: FloorDailyEnergy[] = []
+  const today = new Date()
+  for (let i = 7; i >= 1; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+    const wobble = 0.06 + floorSeed(buildingId, floorNum, i) / 233 / 2
+    const kwh = round2(base * wobble)
+    out.push({
+      day: fmtDay(d),
+      buildingId,
+      floor,
+      energyKwh: kwh,
+      carbonKg: round2(kwh * CARBON_FACTOR),
+      deviceCount: deviceTotal,
+      deviceTotal,
+    })
   }
   return out
 }
