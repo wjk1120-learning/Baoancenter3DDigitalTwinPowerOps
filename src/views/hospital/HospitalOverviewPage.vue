@@ -2,7 +2,7 @@
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchEnergyToday } from '../../api/energy/energy'
-import { fetchTodayAlerts } from '../../api/event/event'
+import { fetchUnhandledEvents } from '../../api/event/event'
 import { eventPushSocket } from '../../ws/eventPushSocket'
 import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
 import AlertPanel from '../../panels/AlertPanel.vue'
@@ -10,19 +10,24 @@ import HealthPanel from '../../panels/HealthPanel.vue'
 import TransformerPanel from '../../panels/TransformerPanel.vue'
 import SceneLoadBar from './SceneLoadBar.vue'
 import BuildingInfoCard from './BuildingInfoCard.vue'
+import FloorPanel from './FloorPanel.vue'
+import { summarizeFloorAlarms } from './floorAlarmState'
+import type { FloorAlarmSummary } from './floorAlarmState'
 import { createCampusScene } from '../../three/campus/sceneManager'
 import { CAMPUS_BUILDINGS, CAMPUS_LAYOUT } from '../../config/campusConfig'
+import type { AlertItem } from '../../api/hospital/types'
 
 defineOptions({ name: 'HospitalOverviewPage' })
 
 /**
- * 医院总览（4.6，福永 HospitalPage 同构，docs/3D园区一期方案.md）：
+ * 医院总览（4.6，福永 HospitalPage 同构，docs/3D园区二期方案.md）：
  * 中间 3D 园区铺底（Draco GLB 六栋 + 福永式环境），左右毛玻璃面板列悬浮贴边。
  * 园区引擎 = src/three/campus/（医院无关，楼栋/布局数据从 src/config/campusConfig 注入）。
- * 批2 交互：hover 高亮 → 点楼聚焦（相机飞近+其它楼隐藏）→ 信息卡；Esc/点空白/× 返回全景。
- * 批3 联动：§2.1 十分钟轮询 → 楼栋能耗染色+楼名 kWh 标签；§3.1+WS 三消息 → 告警楼层
- * 亮灯（红/琥珀呼吸）；信息卡 WS 联动见 BuildingInfoCard（聚焦楼 event 推送重拉 §3.7）。
- * 中间状态区已撤（照搬福永，2026-11-17 拍板）。
+ * 交互：hover 高亮 → 点楼聚焦（相机飞近+其它楼隐藏）→ 信息卡 + 楼层选择器（二期批2）
+ * → 点楼层行/3D 楼层下钻（层聚焦蓝光 pop、其余层压暗）→ 一级返回（楼层态直接回全景）。
+ * 联动：§2.1 十分钟轮询 → 楼名 kWh 标签；§3.11 全量未处理（5 分钟轮询 + WS 三消息
+ * 防抖 2s）→ 告警楼层亮灯（红/琥珀呼吸）+ 楼层选择器行染色 + 看板明细（批3）三视图
+ * 共用一份，亮灯/染色/明细口径一致；信息卡 WS 联动见 BuildingInfoCard。
  * 生命周期（DeviceDetailPage 同款，避免与配电房抢 WebGL）：失活彻底 dispose、
  * 激活重建（GLB 模板缓存模块级持久，重建只重摆位）。
  */
@@ -33,10 +38,19 @@ const loadProgress = ref(0)
 const sceneError = ref(false)
 const selectedId = ref<number | null>(null)
 const selectedName = ref('')
+/** 楼层态（二期批2）：契约楼层键；null = 楼栋聚焦未选层 */
+const selectedFloor = ref<string | null>(null)
+/** 聚焦楼的楼层清单（引擎 getFloors：GLB 实际节点升序） */
+const focusedFloors = ref<string[]>([])
+/** §3.11 全量未处理原始列表（亮灯/选择器染色/看板批3 三视图共用一份） */
+const unhandledAlerts = ref<AlertItem[]>([])
 let scene: {
   dispose(): void
   focusBuilding(id: number): void
   backToCampus(): void
+  focusFloor(buildingId: number, floor: string): void
+  backToBuilding(): void
+  getFloors(buildingId: number): string[]
   setBuildingEnergy(kwhById: Map<number, number>): void
   setBuildingAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]): void
 } | null = null
@@ -56,7 +70,17 @@ function initScene() {
           if (!cfg) return
           selectedId.value = cfg.id
           selectedName.value = cfg.name
+          selectedFloor.value = null
           scene?.focusBuilding(cfg.id)
+          focusedFloors.value = scene?.getFloors(cfg.id) ?? []
+        } else if (
+          pick.kind === 'floor' &&
+          pick.buildingId != null &&
+          pick.floor != null &&
+          pick.buildingId === selectedId.value
+        ) {
+          // 楼栋聚焦态点 3D 楼层 → 下钻（与选择器行同一入口）
+          selectFloor(pick.floor)
         } else {
           clearSelection()
         }
@@ -68,9 +92,19 @@ function initScene() {
   }
 }
 
+/** 选层（选择器行 / 3D 楼层点击）：相机下钻 + 信息卡切楼层模式（选择器自动收起） */
+function selectFloor(floor: string) {
+  if (selectedId.value == null) return
+  selectedFloor.value = floor
+  scene?.focusFloor(selectedId.value, floor)
+}
+
+/** 一级返回（楼层态也直接回全景）：楼层卡缩消 + 选择器/楼层视觉还原 + 相机回全景 */
 function clearSelection() {
   selectedId.value = null
+  selectedFloor.value = null
   selectedName.value = ''
+  focusedFloors.value = []
   scene?.backToCampus()
 }
 
@@ -78,10 +112,10 @@ const onKeydown = (ev: KeyboardEvent) => {
   if (ev.key === 'Escape' && selectedId.value != null) clearSelection()
 }
 
-// ---- 批3 数据联动：能耗染色 + 告警楼层亮灯 ----
+// ---- 数据联动：楼名 kWh + 告警楼层亮灯/染色 ----
 const NAME_TO_ID = new Map(CAMPUS_BUILDINGS.map((b) => [b.name, b.id]))
 
-/** §2.1 → 染色 + 楼名 kWh（10 分钟轮询；楼名键 → buildingId 映射） */
+/** §2.1 → 楼名 kWh（10 分钟轮询；楼名键 → buildingId 映射） */
 async function refreshEnergy() {
   if (!scene) return
   const today = await fetchEnergyToday().catch(() => null)
@@ -94,12 +128,14 @@ async function refreshEnergy() {
   scene.setBuildingEnergy(kwhById)
 }
 
-/** §3.1 → 告警楼层亮灯数据（level 1/2 且未处理；locations 解析不出楼层的忽略）。
- *  WS 三消息统一防抖 2s 后重拉本函数（today_events 整表替换/event 增量/handled 灭灯
- *  都收敛为"全量重建亮灯集合"，数据一致性最简）。 */
+/** §3.11 全量未处理 → 原始列表留 ref（选择器染色/看板明细共用）+ level 1/2 过滤喂 3D
+ *  亮灯。驱动：WS 三消息统一防抖 2s 重拉（today_events 整表替换/event 增量/handled 灭灯
+ *  都收敛为"全量重建"）+ 5 分钟轮询兜底 + 处理成功立即重拉（批3 接）。
+ *  「未处理=活着=亮灯」口径：不限今日，昨日未处理同样亮灯（2026-11-19 拍板）。 */
 async function refreshBuildingAlarms() {
   if (!scene) return
-  const alerts = await fetchTodayAlerts().catch(() => [])
+  const alerts = await fetchUnhandledEvents().catch(() => [])
+  unhandledAlerts.value = alerts
   const alarms: { buildingId: number; floorKey: string; level: number }[] = []
   for (const a of alerts) {
     if (a.status !== 'pending') continue
@@ -113,6 +149,7 @@ async function refreshBuildingAlarms() {
 }
 
 let energyTimer: number | null = null
+let unhandledTimer: number | null = null
 let alarmDebounce: number | null = null
 let eventPushSocketOff: (() => void)[] = []
 
@@ -120,6 +157,9 @@ let eventPushSocketOff: (() => void)[] = []
 function startLinkages() {
   if (energyTimer == null) {
     energyTimer = window.setInterval(() => void refreshEnergy(), 10 * 60 * 1000)
+  }
+  if (unhandledTimer == null) {
+    unhandledTimer = window.setInterval(() => void refreshBuildingAlarms(), 5 * 60 * 1000)
   }
   if (eventPushSocketOff.length === 0) {
     const debounced = () => {
@@ -138,6 +178,10 @@ function stopLinkages() {
   if (energyTimer != null) {
     window.clearInterval(energyTimer)
     energyTimer = null
+  }
+  if (unhandledTimer != null) {
+    window.clearInterval(unhandledTimer)
+    unhandledTimer = null
   }
   if (alarmDebounce != null) {
     window.clearTimeout(alarmDebounce)
@@ -185,6 +229,13 @@ const router = useRouter()
 /** 聚焦态：左右四面板淡出、信息卡淡入（福永聚焦收面板同款形态） */
 const focused = computed(() => selectedId.value != null)
 
+/** 聚焦楼的楼层告警分桶（选择器行染色/批3 看板与 3D 亮灯共用一份 §3.11 数据） */
+const focusedAlarmMap = computed<Map<string, FloorAlarmSummary>>(() =>
+  selectedId.value != null
+    ? summarizeFloorAlarms(selectedId.value, unhandledAlerts.value)
+    : new Map<string, FloorAlarmSummary>(),
+)
+
 /** 面板头图标（福永 PanelContainer registry 同款 path） */
 const ICONS = {
   energy: 'M3 3h18v18H3zM3 9h18M9 21V9',
@@ -205,13 +256,28 @@ const ICONS = {
       <button type="button" @click="disposeScene(); initScene()">重试</button>
     </div>
 
-    <!-- 楼栋信息卡（点楼聚焦时淡入；× 关闭/Esc 返回全景） -->
-    <Transition name="bic">
-      <BuildingInfoCard
+    <!-- 楼层选择器（楼栋聚焦态左侧滑入；选层自动收起，× /Esc 一级返回全景） -->
+    <Transition name="fp">
+      <FloorPanel
         v-if="selectedId != null"
-        :key="selectedId"
         :building-id="selectedId"
         :building-name="selectedName"
+        :floors="focusedFloors"
+        :alarms="focusedAlarmMap"
+        :selected-floor="selectedFloor"
+        @focus-floor="selectFloor"
+      />
+    </Transition>
+
+    <!-- 楼栋/楼层信息卡：楼栋⇄楼层 out-in 缩放过渡（层间切换同 key 热替换不重播）；
+         × 关闭 / Esc 一级返回全景 -->
+    <Transition name="bic" mode="out-in">
+      <BuildingInfoCard
+        v-if="selectedId != null"
+        :key="selectedFloor != null ? 'floor' : selectedId"
+        :building-id="selectedId"
+        :building-name="selectedName"
+        :floor="selectedFloor"
         @close="clearSelection"
       />
     </Transition>
@@ -395,15 +461,50 @@ const ICONS = {
   box-shadow: 0 0 0 4px rgba(43, 124, 227, 0.14);
 }
 
-/* 信息卡淡入/淡出（Transition name=bic 作用在子组件根元素上） */
+/* 信息卡过渡（Transition name=bic 作用在子组件根元素上，mode=out-in）：
+   楼栋⇄楼层时原地缩小消失→出现（卡片定位占用 translateY(-50%)，缩放须带基准写）；
+   层间切换不换 key 不重播 */
 .bic-enter-active {
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
 .bic-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
-.bic-enter-from,
+.bic-enter-from {
+  opacity: 0;
+  transform: translateY(-50%) scale(0.86);
+}
 .bic-leave-to {
   opacity: 0;
+  transform: translateY(-50%) scale(0.86);
+}
+/* 楼层选择器从左滑入/滑出 */
+.fp-enter-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fp-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.fp-enter-from,
+.fp-leave-to {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+/* 动效兜底：系统开启「减少动态效果」时只保留透明度过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .bic-enter-active,
+  .bic-leave-active,
+  .fp-enter-active,
+  .fp-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .bic-enter-from,
+  .bic-leave-to {
+    transform: translateY(-50%);
+  }
+  .fp-enter-from,
+  .fp-leave-to {
+    transform: none;
+  }
 }
 </style>

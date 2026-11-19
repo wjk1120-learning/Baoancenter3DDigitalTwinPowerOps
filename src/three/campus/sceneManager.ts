@@ -268,6 +268,11 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       el.style.display = 'none'
       return
     }
+    // 楼层聚焦态隐藏全部楼名标签（楼名卡挡下钻视线；退回全景/楼栋态自动恢复）
+    if (focusedFloor != null) {
+      el.style.display = 'none'
+      return
+    }
     // 标签挂在 container（labelHost）内——必须用 container 的布局尺寸换算，
     // 不能用 getBoundingClientRect（App 外层 transform:scale 会把两者差出一个缩放因子，
     // 标签整体偏移——2026-11-18 用户截图实锤）
@@ -644,7 +649,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   }
 
   /** 聚焦楼层（楼栋聚焦态的子状态）：相机飞至该层包围盒 + 楼层聚焦视觉。
-   *  楼层行清单来自 getFloors（GLB 实际节点）；页面负责信息卡/看板切换。 */
+   *  机位方向继承楼栋 focusDir（行政楼正门朝东——楼层聚焦与楼栋聚焦同机位方向），
+   *  缺省全场南向。楼层行清单来自 getFloors（GLB 实际节点）；页面负责信息卡/看板切换。 */
   function focusFloor(buildingId: number, floorKey: string) {
     const node = buildingFloors.get(buildingId)?.get(floorKey)
     if (!node) return
@@ -654,7 +660,9 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     for (const [bid, r] of buildingRoots) r.visible = bid === buildingId
     applyFloorFocus(node)
     const box = new THREE.Box3().setFromObject(node)
-    const { pos, tg } = computeFit(box, box, CAMPUS_FORWARD)
+    const cfg = buildings.find((b) => b.id === buildingId)
+    const dir = cfg?.focusDir ? new THREE.Vector3(...cfg.focusDir).normalize() : CAMPUS_FORWARD
+    const { pos, tg } = computeFit(box, box, dir)
     flyTo(pos, tg)
   }
 

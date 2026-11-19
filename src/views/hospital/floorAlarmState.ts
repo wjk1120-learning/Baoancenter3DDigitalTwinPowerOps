@@ -2,7 +2,7 @@
  * 楼层告警状态纯函数（3D 园区二期，数据源 = §3.11 未处理事件列表归一的 AlertItem[]）。
  * 三视图共用一份分桶结果，保证「面板染色 == 3D 楼层亮光 == 看板明细」口径一致：
  *   - summarizeFloorAlarms：楼层行状态（紧急红/严重橙/正常）+ 该层 1/2 级条数
- *   - floorAlerts：楼层预警看板明细（时间倒序）
+ *   - floorAlerts：楼层告警看板明细（时间倒序）
  * 拍板口径（2026-11-19）：
  *   - 只认未处理 + level 1/2（一般/提醒不参与楼层状态、不进看板、不亮灯）
  *   - 每层取最高等级：同层既有紧急又有严重 → 显示紧急（等级数值小=优先级高）
@@ -43,7 +43,7 @@ export function summarizeFloorAlarms(
   return map
 }
 
-/** 楼层预警看板明细：未处理 + level 1/2 + building/floor 双匹配，时间倒序 */
+/** 楼层告警看板明细：未处理 + level 1/2 + building/floor 双匹配，时间倒序 */
 export function floorAlerts(buildingId: number, floor: string, alerts: AlertItem[]): AlertItem[] {
   return alerts
     .filter(
