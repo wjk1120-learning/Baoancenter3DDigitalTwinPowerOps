@@ -116,6 +116,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   /** 相机飞行（点楼聚焦/返回全景）：每帧插值比例与时长 */
   const FLY_STEP = 0.09
 
+  const v3 = new THREE.Vector3()
   /** 相机飞行动画状态；active 期间 controls 禁用（福永同款，动画结束恢复） */
   const fly = {
     active: false,
@@ -151,6 +152,16 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       }
       g.holder.scale.y = Math.max(smootherstep(t), 0.0001)
     }
+    // 告警楼层呼吸闪烁（红/琥珀按 level，强度 sin 波动）
+    if (alarmMeshes.size) {
+      const breath = 0.55 + 0.45 * Math.abs(Math.sin(now / 400))
+      for (const info of alarmMeshes.values()) {
+        const cloned = info.cloned as THREE.MeshStandardMaterial
+        if (cloned.emissive) cloned.emissiveIntensity = breath
+      }
+    }
+    // 楼名标签跟随投影
+    for (const id of labelEls.keys()) projectTop(id)
     // 相机飞行推进
     if (fly.active) {
       fly.t = Math.min(fly.t + FLY_STEP, 1)
@@ -179,12 +190,74 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   const ro = new ResizeObserver(onResize)
   ro.observe(container)
 
-  /** 楼栋注册表：id → 摆位 holder / 世界盒（聚焦取景与拾取用） */
+  /** 楼名标签层：绝对定位覆盖层（pointer-events none），每帧按楼顶投影摆位 */
+  const labelHost = document.createElement('div')
+  labelHost.style.cssText =
+    'position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5;'
+  container.appendChild(labelHost)
+
+  const makeLabel = (id: number, name: string) => {
+    const el = document.createElement('div')
+    // 福永楼名标签同款：白玻璃圆角卡，楼名大字 + kWh 小字两行居中
+    el.style.cssText = [
+      'position:absolute',
+      'transform:translate(-50%,-100%)',
+      'padding:6px 18px',
+      'border-radius:10px',
+      'background:rgba(255,255,255,0.85)',
+      'border:1px solid rgba(255,255,255,0.95)',
+      'box-shadow:0 4px 14px rgba(43,108,160,0.18)',
+      'text-align:center',
+      'white-space:nowrap',
+      'pointer-events:none',
+    ].join(';')
+    el.innerHTML =
+      `<div style="font-size:15px;font-weight:700;color:#2b7ce3;line-height:1.5">${name}</div>` +
+      `<div class="kwh" style="font-size:13px;color:#2b7ce3;line-height:1.4">—</div>`
+    labelHost.appendChild(el)
+    labelEls.set(id, el)
+  }
+
+  const projectTop = (id: number) => {
+    const box = buildingBoxes.get(id)
+    const root = buildingRoots.get(id)
+    const el = labelEls.get(id)
+    if (!box || !root || !el) return
+    if (!root.visible) {
+      el.style.display = 'none'
+      return
+    }
+    const center = box.getCenter(new THREE.Vector3())
+    center.y = box.max.y + (root.userData.labelLift as number ?? 8)
+    v3.copy(center).project(camera)
+    if (v3.z > 1) {
+      el.style.display = 'none'
+      return
+    }
+    // 标签挂在 container（labelHost）内——必须用 container 的布局尺寸换算，
+    // 不能用 getBoundingClientRect（App 外层 transform:scale 会把两者差出一个缩放因子，
+    // 标签整体偏移——2026-11-18 用户截图实锤）
+    el.style.display = 'block'
+    el.style.left = `${(v3.x * 0.5 + 0.5) * container.clientWidth}px`
+    el.style.top = `${(-v3.y * 0.5 + 0.5) * container.clientHeight}px`
+  }
+
+  /** 楼栋注册表：id → 摆位 holder / 世界盒 / 楼层节点映射（亮灯用） */
   const buildingRoots = new Map<number, THREE.Group>()
   const buildingBoxes = new Map<number, THREE.Box3>()
+  const buildingFloors = new Map<number, Map<string, THREE.Object3D>>()
+  /** 最近一次告警集合（§3.1 首拉可能先于楼栋加载完成，加载后回放亮灯） */
+  let pendingAlarms: { buildingId: number; floorKey: string; level: number }[] | null = null
+  /** 最近一次染色数据（§2.1 可能先于楼栋加载完成，标签创建时回填 kWh）。
+   *  用包装对象避开 TS 对闭包 let 的 null 收窄误报 */
+  const pendingKwh: { data: Map<number, number> | null } = { data: null }
 
-  /** 拾取代理：每栋一个隐形盒（colorWrite/depthWrite 全关，渲染零像素、raycast 可命中），
-   *  避免对几千个建筑 mesh 逐个求交 */
+  // ---- 数据联动状态（批3）：告警楼层亮灯 / 楼名标签 ----
+  /** 告警楼层：mesh → 克隆材质+等级（灭灯还原共享材质） */
+  const alarmMeshes = new Map<THREE.Mesh, { level: number; orig: THREE.Material; cloned: THREE.Material }>()
+  /** 楼名标签 DOM（楼名 + 今日 kWh，屏幕投影自绘） */
+  const labelEls = new Map<number, HTMLDivElement>()
+
   // ---- 六栋串行加载（Draco；失败不阻塞，进度含失败栋） ----
   // 楼栋就绪先压扁隐藏，全部就绪后统一错峰生长（福永进场动画同款观感）
   void (async () => {
@@ -196,9 +269,11 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         b.object.scale.y = 0.0001
         b.object.userData.buildingId = cfg.id
         b.object.userData.targetFoot = cfg.targetFoot
+        b.object.userData.labelLift = cfg.labelLift ?? 8
         scene.add(b.object)
         buildingRoots.set(cfg.id, b.object)
         buildingBoxes.set(cfg.id, b.box)
+        buildingFloors.set(cfg.id, b.floors)
         grown.push(b.object)
       }
       done++
@@ -207,6 +282,19 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     if (disposed) return
     const t0 = performance.now()
     grown.forEach((holder, i) => growQueue.push({ holder, startAt: t0 + i * GROW_STAGGER }))
+    // 楼名标签（建好即回填 kWh 时序差：§2.1 可能先于加载完成到达）
+    for (const cfg of buildings) {
+      if (buildingRoots.has(cfg.id)) {
+        makeLabel(cfg.id, cfg.name)
+        const cached = pendingKwh.data?.get(cfg.id)
+        if (cached) {
+          const kwhEl = labelEls.get(cfg.id)?.querySelector('.kwh')
+          if (kwhEl) kwhEl.textContent = `${cached.toLocaleString('zh-CN')} kWh`
+        }
+      }
+    }
+    // 告警亮灯回放（§3.1 首拉可能先于楼栋加载完成）
+    if (pendingAlarms) applyAlarms(pendingAlarms)
     cb.onReady?.()
   })()
 
@@ -279,7 +367,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       const root = buildingRoots.get(id)
       root?.traverse((o) => {
         const mesh = o as THREE.Mesh
-        if (!mesh.isMesh) return
+        // 告警亮灯层的克隆材质不参与 hover（保持红/琥珀呼吸不被蓝光覆盖）
+        if (!mesh.isMesh || alarmMeshes.has(mesh)) return
         const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
         for (const m of mats) {
           const std = m as THREE.MeshStandardMaterial
@@ -380,7 +469,61 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     flyTo(pos, tg)
   }
 
-  return { dispose, scene, focusBuilding, backToCampus }
+  // ---- 数据联动（批3）：楼名标签 kWh + 告警楼层亮灯 ----
+
+  /** 楼名标签 kWh 更新（§2.1 轮询数据；2026-11-18 用户拍板：删整楼染色，只保留
+   *  告警楼层亮灯——楼体 emissive 不做能耗染色） */
+  function setBuildingEnergy(kwhById: Map<number, number>) {
+    pendingKwh.data = kwhById
+    for (const [id, kwh] of kwhById) {
+      const el = labelEls.get(id)
+      const kwhEl = el?.querySelector('.kwh')
+      if (kwhEl) kwhEl.textContent = `${kwh.toLocaleString('zh-CN')} kWh`
+    }
+  }
+
+  /** 告警楼层亮灯（全量替换）：level 1 紧急红 / 2 严重琥珀，呼吸闪烁；
+   *  亮灯层用克隆材质（快照当前染色+告警色），灭灯还原共享材质。
+   *  alarms 会缓存（pendingAlarms）——§3.1 首拉可能先于楼栋加载完成，加载后自动回放。 */
+  function setBuildingAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]) {
+    pendingAlarms = alarms
+    applyAlarms(alarms)
+  }
+
+  function applyAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]) {
+    // 全灭：还原共享材质
+    for (const [mesh, info] of alarmMeshes) {
+      mesh.material = info.orig
+      info.cloned.dispose()
+    }
+    alarmMeshes.clear()
+    for (const a of alarms) {
+      const node = buildingFloors.get(a.buildingId)?.get(a.floorKey)
+      if (!node) continue
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh || alarmMeshes.has(mesh)) return
+        const orig = mesh.material as THREE.Material
+        const cloned = orig.clone()
+        mesh.material = cloned
+        alarmMeshes.set(mesh, { level: a.level, orig, cloned })
+        const std = cloned as THREE.MeshStandardMaterial
+        if (std.emissive) {
+          std.emissive.setHex(a.level === 1 ? 0xe53e3e : 0xed8936)
+          std.emissiveIntensity = 0.6
+        }
+      })
+    }
+  }
+
+  return {
+    dispose,
+    scene,
+    focusBuilding,
+    backToCampus,
+    setBuildingEnergy,
+    setBuildingAlarms,
+  }
 }
 
 /** 由摆位配置估算园区包围盒（加载前就能取景）。

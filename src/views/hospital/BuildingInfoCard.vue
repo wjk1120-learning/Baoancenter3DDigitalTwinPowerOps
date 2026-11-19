@@ -7,7 +7,7 @@
  *   §3.7 当前预警数、§2.3 近 7 日能耗（蓝面积图）、§3.8 近 7 日告警（橙面积图）。
  * 今日两项复用页面级 §2.1（轻接口双消费先例）；趋势图为历史统计不随 WS 刷新。
  */
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import BaseChart from '../../panels/BaseChart.vue'
 import type { EChartsCoreOption } from 'echarts/core'
 import { fetchEnergyToday, fetchEnergyYesterday, fetchBuildingEnergyHistory } from '../../api/energy/energy'
@@ -15,6 +15,7 @@ import {
   fetchBuildingCurrentAlarmCount,
   fetchBuildingDailyAlarms,
 } from '../../api/event/event'
+import { eventPushSocket } from '../../ws/eventPushSocket'
 import type { EnergyDailyStats } from '../../api/energy/types'
 import type { BuildingDailyAlarm } from '../../api/event/types'
 
@@ -60,6 +61,19 @@ watch(
   },
   { immediate: true },
 )
+
+/** WS 联动（批3）：event 单条推送且归属本楼 → 只重拉 §3.7 当前预警数（对齐拍板口径）。
+ *  mock 模式 WS 不建连，本订阅静默无效。 */
+async function reloadAlarmCount() {
+  const cnt = await fetchBuildingCurrentAlarmCount(props.buildingId).catch(() => null)
+  if (cnt != null) alarmCount.value = cnt
+}
+
+const offSingle = eventPushSocket.onSingle((item) => {
+  if (item.locations?.some((l) => l.building === props.buildingId)) void reloadAlarmCount()
+})
+
+onUnmounted(() => offSingle())
 
 const md = (day: string) => day.slice(5).replace('-', '/')
 

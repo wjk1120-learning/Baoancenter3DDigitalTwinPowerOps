@@ -72,6 +72,7 @@ export const CAMPUS_BUILDINGS: CampusBuildingConfig[] = [
     targetFoot: FOOT[1]!,
     yaw: YAW[1] ?? 0,
     foot: REAL_FOOT[1],
+    labelLift: 3, // 标签往下移（2026-11-18 用户：门诊1 标签太高）
   },
   {
     id: 2,

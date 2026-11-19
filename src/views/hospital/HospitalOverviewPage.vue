@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { fetchEnergyToday } from '../../api/energy/energy'
+import { fetchTodayAlerts } from '../../api/event/event'
+import { eventPushSocket } from '../../ws/eventPushSocket'
 import EnergyOverviewPanel from '../../panels/EnergyOverviewPanel.vue'
 import AlertPanel from '../../panels/AlertPanel.vue'
 import HealthPanel from '../../panels/HealthPanel.vue'
@@ -17,6 +20,8 @@ defineOptions({ name: 'HospitalOverviewPage' })
  * 中间 3D 园区铺底（Draco GLB 六栋 + 福永式环境），左右毛玻璃面板列悬浮贴边。
  * 园区引擎 = src/three/campus/（医院无关，楼栋/布局数据从 src/config/campusConfig 注入）。
  * 批2 交互：hover 高亮 → 点楼聚焦（相机飞近+其它楼隐藏）→ 信息卡；Esc/点空白/× 返回全景。
+ * 批3 联动：§2.1 十分钟轮询 → 楼栋能耗染色+楼名 kWh 标签；§3.1+WS 三消息 → 告警楼层
+ * 亮灯（红/琥珀呼吸）；信息卡 WS 联动见 BuildingInfoCard（聚焦楼 event 推送重拉 §3.7）。
  * 中间状态区已撤（照搬福永，2026-11-17 拍板）。
  * 生命周期（DeviceDetailPage 同款，避免与配电房抢 WebGL）：失活彻底 dispose、
  * 激活重建（GLB 模板缓存模块级持久，重建只重摆位）。
@@ -32,6 +37,8 @@ let scene: {
   dispose(): void
   focusBuilding(id: number): void
   backToCampus(): void
+  setBuildingEnergy(kwhById: Map<number, number>): void
+  setBuildingAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]): void
 } | null = null
 
 function initScene() {
@@ -71,25 +78,105 @@ const onKeydown = (ev: KeyboardEvent) => {
   if (ev.key === 'Escape' && selectedId.value != null) clearSelection()
 }
 
+// ---- 批3 数据联动：能耗染色 + 告警楼层亮灯 ----
+const NAME_TO_ID = new Map(CAMPUS_BUILDINGS.map((b) => [b.name, b.id]))
+
+/** §2.1 → 染色 + 楼名 kWh（10 分钟轮询；楼名键 → buildingId 映射） */
+async function refreshEnergy() {
+  if (!scene) return
+  const today = await fetchEnergyToday().catch(() => null)
+  if (!today) return
+  const kwhById = new Map<number, number>()
+  for (const [name, stat] of Object.entries(today.buildingStats)) {
+    const id = NAME_TO_ID.get(name)
+    if (id != null) kwhById.set(id, stat.energyKwh)
+  }
+  scene.setBuildingEnergy(kwhById)
+}
+
+/** §3.1 → 告警楼层亮灯数据（level 1/2 且未处理；locations 解析不出楼层的忽略）。
+ *  WS 三消息统一防抖 2s 后重拉本函数（today_events 整表替换/event 增量/handled 灭灯
+ *  都收敛为"全量重建亮灯集合"，数据一致性最简）。 */
+async function refreshBuildingAlarms() {
+  if (!scene) return
+  const alerts = await fetchTodayAlerts().catch(() => [])
+  const alarms: { buildingId: number; floorKey: string; level: number }[] = []
+  for (const a of alerts) {
+    if (a.status !== 'pending') continue
+    const lv = a.eventLevel
+    if (lv !== 1 && lv !== 2) continue
+    for (const loc of a.locations ?? []) {
+      alarms.push({ buildingId: loc.building, floorKey: loc.floor, level: lv })
+    }
+  }
+  scene.setBuildingAlarms(alarms)
+}
+
+let energyTimer: number | null = null
+let alarmDebounce: number | null = null
+let eventPushSocketOff: (() => void)[] = []
+
+/** 定时器与 WS 订阅（幂等）；初始数据拉取在 initScene 之后单独触发 */
+function startLinkages() {
+  if (energyTimer == null) {
+    energyTimer = window.setInterval(() => void refreshEnergy(), 10 * 60 * 1000)
+  }
+  if (eventPushSocketOff.length === 0) {
+    const debounced = () => {
+      if (alarmDebounce != null) window.clearTimeout(alarmDebounce)
+      alarmDebounce = window.setTimeout(() => void refreshBuildingAlarms(), 2000)
+    }
+    eventPushSocketOff = [
+      eventPushSocket.onTodayList(debounced),
+      eventPushSocket.onSingle(debounced),
+      eventPushSocket.onHandled(debounced),
+    ]
+  }
+}
+
+function stopLinkages() {
+  if (energyTimer != null) {
+    window.clearInterval(energyTimer)
+    energyTimer = null
+  }
+  if (alarmDebounce != null) {
+    window.clearTimeout(alarmDebounce)
+    alarmDebounce = null
+  }
+  for (const off of eventPushSocketOff) off()
+  eventPushSocketOff = []
+}
+
 function disposeScene() {
   scene?.dispose()
   scene = null
 }
 
+/** 场景就绪后的首拉（染色/亮灯）+ 启动轮询与 WS——必须在 initScene 之后 */
+async function startSceneLinkages() {
+  initScene()
+  await nextTick()
+  await refreshEnergy()
+  await refreshBuildingAlarms()
+  startLinkages()
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  nextTick(initScene)
+  void startSceneLinkages()
 })
 onActivated(() => {
   window.addEventListener('keydown', onKeydown)
-  nextTick(initScene)
+  void startSceneLinkages()
 })
 onDeactivated(() => {
   window.removeEventListener('keydown', onKeydown)
+  stopLinkages()
   disposeScene()
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  stopLinkages()
   disposeScene()
 })
 

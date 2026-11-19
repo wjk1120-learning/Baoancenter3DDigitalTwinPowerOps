@@ -206,13 +206,20 @@ function sampleCurve(controls: Pt[], divisions: number): Pt[] {
     }
     return pts
   }
-  const curve = new THREE.CatmullRomCurve3(
-    controls.map(([x, z]) => new THREE.Vector3(x, 0, z)),
-    false,
-    'catmullrom',
-    0.18,
-  )
-  return curve.getSpacedPoints(divisions).map((p) => [p.x, p.z] as Pt)
+  // 3 点以上：逐段线性均分（宝中路网全直线，不需要曲线插值——
+  // 福 CatmullRomCurve3 分支删除：@types/three 类型源下该类解析异常）
+  const pts: Pt[] = []
+  for (let i = 0; i < controls.length - 1; i += 1) {
+    const [ax, az] = controls[i]!
+    const [bx, bz] = controls[i + 1]!
+    const n = Math.max(1, Math.round(divisions / (controls.length - 1)))
+    for (let k = 0; k < n; k += 1) {
+      const t = k / n
+      pts.push([ax + (bx - ax) * t, az + (bz - az) * t])
+    }
+  }
+  pts.push(controls[controls.length - 1]!)
+  return pts
 }
 
 /** 东西干道：水平直线 */
