@@ -8,7 +8,7 @@ import { useMock } from '../mock'
 import AlertDetailDialog from '../components/AlertDetailDialog.vue'
 
 /**
- * 医院总览 · 告警信息面板（福永 AlertPanel 同构，宝中重写）：
+ * 医院总览 · 今日告警面板（福永 AlertPanel 同构，宝中重写）：
  * 数据链 = 首进 §3.1 全量（v5.9.2 起契约取消分页）→ WS 实时接管：
  * today_events 整表替换 / event 单条→防抖重拉 §3.1 / event_handled→更新本地行；
  * 断线重连成功或 stale（90s 无消息的半死连接）→ 重拉 §3.1 对齐。

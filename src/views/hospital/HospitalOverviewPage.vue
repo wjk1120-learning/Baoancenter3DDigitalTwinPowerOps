@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchEnergyToday } from '../../api/energy/energy'
 import { fetchUnhandledEvents } from '../../api/event/event'
@@ -366,11 +375,24 @@ const ICONS = {
     </div>
 
     <!-- 左侧浮动面板列（全屏态滑出屏幕） -->
-    <aside class="side left" :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }">
+    <aside
+      class="side left"
+      :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }"
+    >
       <section class="panel-block glass-card" :style="{ flex: 0.7 }">
         <div class="card-head">
           <span class="card-ico">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path :d="ICONS.energy" />
             </svg>
           </span>
@@ -384,7 +406,17 @@ const ICONS = {
       <section class="panel-block glass-card" :style="{ flex: 1.6 }">
         <div class="card-head">
           <span class="card-ico">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path :d="ICONS.transformer" />
             </svg>
           </span>
@@ -397,11 +429,24 @@ const ICONS = {
     </aside>
 
     <!-- 右侧浮动面板列（全屏态滑出屏幕） -->
-    <aside class="side right" :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }">
+    <aside
+      class="side right"
+      :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }"
+    >
       <section class="panel-block glass-card" :style="{ flex: 1 }">
         <div class="card-head">
           <span class="card-ico">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path :d="ICONS.health" />
             </svg>
           </span>
@@ -416,11 +461,21 @@ const ICONS = {
       <section class="panel-block glass-card" :style="{ flex: 2 }">
         <div class="card-head">
           <span class="card-ico">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path :d="ICONS.alert" />
             </svg>
           </span>
-          <h3 class="card-title">告警信息</h3>
+          <h3 class="card-title">今日告警</h3>
         </div>
         <div class="panel-body">
           <AlertPanel />
@@ -490,7 +545,9 @@ const ICONS = {
 /* 聚焦态：面板淡出让位（pointer-events 同步关掉避免挡住信息卡点击）；
    全屏态：面板滑出屏幕（批3，transition 只动 transform/opacity——hallmark 底线） */
 .side {
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
 }
 .side-hidden {
   opacity: 0;
@@ -587,10 +644,14 @@ const ICONS = {
    楼栋⇄楼层时原地缩小消失→出现（卡片定位占用 translateY(-50%)，缩放须带基准写）；
    层间切换不换 key 不重播 */
 .bic-enter-active {
-  transition: opacity 0.28s ease, transform 0.28s ease;
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
 }
 .bic-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
 .bic-enter-from {
   opacity: 0;
@@ -602,10 +663,14 @@ const ICONS = {
 }
 /* 楼层选择器从左滑入/滑出 */
 .fp-enter-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 }
 .fp-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
 }
 .fp-enter-from,
 .fp-leave-to {
@@ -614,10 +679,14 @@ const ICONS = {
 }
 /* 告警看板从左轻滑入（锚在收起条右缘，展开随动走自身 transform） */
 .fb-enter-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 }
 .fb-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
 .fb-enter-from,
 .fb-leave-to {
