@@ -260,18 +260,18 @@ const router = useRouter()
 /** 聚焦态：左右四面板淡出、信息卡淡入（福永聚焦收面板同款形态） */
 const focused = computed(() => selectedId.value != null)
 
-/** 园区环境异常（批3 收尾，2026-11-20 拍板=系统运行状态口径）：3D 场景加载失败
+/** 院区环境异常（批3 收尾，2026-11-20 拍板=系统运行状态口径）：3D 场景加载失败
  *  或 §3.11 告警主链拉取失败 → 异常；其余一律正常——告警有无由右侧告警面板表达，
  *  这里只反映「环境/链路健康」（默认正常） */
 const campusAbnormal = computed(() => sceneError.value || alarmLinkBroken.value)
 /** §3.11 拉取失败标记（成功自愈翻回 false；失败保留旧告警数据不清空灭灯） */
 const alarmLinkBroken = ref(false)
 
-/** 状态胶囊文案：楼层聚焦 > 楼栋聚焦 > 园区环境（正常/异常） */
+/** 状态胶囊文案：楼层聚焦 > 楼栋聚焦 > 院区环境（正常/异常） */
 const statusText = computed(() => {
   if (selectedFloor.value != null) return '楼层聚焦'
   if (selectedId.value != null) return '楼栋聚焦'
-  return campusAbnormal.value ? '园区环境异常' : '园区环境正常'
+  return campusAbnormal.value ? '院区环境异常' : '院区环境正常'
 })
 
 /** 状态胶囊点击：仅全景态进出全屏；聚焦态点击无效（2026-11-20 拍板） */
@@ -303,7 +303,7 @@ const ICONS = {
     <div ref="sceneEl" class="scene-host" />
     <SceneLoadBar :progress="loadProgress" />
     <div v-if="sceneError" class="scene-error">
-      <p>3D 园区加载失败（WebGL 不可用或模型异常）</p>
+      <p>3D 院区加载失败（WebGL 不可用或模型异常）</p>
       <button type="button" @click="disposeScene(); initScene()">重试</button>
     </div>
 
@@ -347,7 +347,7 @@ const ICONS = {
       />
     </Transition>
 
-    <!-- 中间状态胶囊（状态+全屏合一，批3 收尾）：全景态显示「园区环境正常/异常」
+    <!-- 中间状态胶囊（状态+全屏合一，批3 收尾）：全景态显示「院区环境正常/异常」
          （异常=系统运行状态：场景加载失败/告警主链断），点击进出全屏（隐藏/显示面板）
          ——全屏态亮灯楼层挂引线小卡；楼栋/楼层聚焦态只作状态指示、动作字隐藏且
          点击无效（2026-11-20 拍板） -->

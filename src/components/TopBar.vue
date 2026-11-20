@@ -115,8 +115,12 @@ onBeforeUnmount(() => {
   <header class="topbar">
     <div class="brand">
       <!-- logo 暂用福永图占位，待换成宝安中心医院自己的 -->
-      <img :src="logoUrl" class="brand-logo" alt="宝安中心医院" />
-      <span class="title">宝安中心医院电力智能运维平台</span>
+      <img :src="logoUrl" class="brand-logo" alt="深圳市宝安区中心医院" />
+      <!-- 两行品牌（2026-11-20 拍板）：上行医院全称（渐变主字），下行灰字平台名 -->
+      <span class="title">
+        <span class="title-main">深圳市宝安区中心医院</span>
+        <span class="title-sub">易电能源管理平台</span>
+      </span>
     </div>
 
     <PageTabs />
@@ -236,14 +240,27 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 .title {
-  font-size: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  white-space: nowrap;
+}
+.title-main {
+  font-size: 22px;
   font-weight: 700;
   background: linear-gradient(90deg, var(--primary), var(--cyan-deep));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   letter-spacing: 2px;
-  white-space: nowrap;
+  line-height: 1.2;
+}
+.title-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 1px;
+  line-height: 1.2;
 }
 
 .nav-wrap {

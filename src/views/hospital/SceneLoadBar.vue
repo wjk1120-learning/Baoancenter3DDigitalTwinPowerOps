@@ -9,7 +9,7 @@ defineProps<{ progress: number }>()
       <div class="bar">
         <div class="fill" :style="{ width: `${Math.round(progress * 100)}%` }" />
       </div>
-      <span class="txt">园区加载中 {{ Math.round(progress * 100) }}%</span>
+      <span class="txt">院区加载中 {{ Math.round(progress * 100) }}%</span>
     </div>
   </Transition>
 </template>
