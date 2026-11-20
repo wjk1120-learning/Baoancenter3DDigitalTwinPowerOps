@@ -156,7 +156,13 @@ async function refreshEnergy() {
  *  「未处理=活着=亮灯」口径：不限今日，昨日未处理同样亮灯（2026-11-19 拍板）。 */
 async function refreshBuildingAlarms() {
   if (!scene) return
-  const alerts = await fetchUnhandledEvents().catch(() => [])
+  // 拉取失败：环境胶囊转异常（alarmLinkBroken），旧告警数据保留不清空灭灯
+  const alerts = await fetchUnhandledEvents().catch(() => null)
+  if (alerts == null) {
+    alarmLinkBroken.value = true
+    return
+  }
+  alarmLinkBroken.value = false
   unhandledAlerts.value = alerts
   const alarms: { buildingId: number; floorKey: string; level: number }[] = []
   for (const a of alerts) {
@@ -254,6 +260,26 @@ const router = useRouter()
 /** 聚焦态：左右四面板淡出、信息卡淡入（福永聚焦收面板同款形态） */
 const focused = computed(() => selectedId.value != null)
 
+/** 园区环境异常（批3 收尾，2026-11-20 拍板=系统运行状态口径）：3D 场景加载失败
+ *  或 §3.11 告警主链拉取失败 → 异常；其余一律正常——告警有无由右侧告警面板表达，
+ *  这里只反映「环境/链路健康」（默认正常） */
+const campusAbnormal = computed(() => sceneError.value || alarmLinkBroken.value)
+/** §3.11 拉取失败标记（成功自愈翻回 false；失败保留旧告警数据不清空灭灯） */
+const alarmLinkBroken = ref(false)
+
+/** 状态胶囊文案：楼层聚焦 > 楼栋聚焦 > 园区环境（正常/异常） */
+const statusText = computed(() => {
+  if (selectedFloor.value != null) return '楼层聚焦'
+  if (selectedId.value != null) return '楼栋聚焦'
+  return campusAbnormal.value ? '园区环境异常' : '园区环境正常'
+})
+
+/** 状态胶囊点击：仅全景态进出全屏；聚焦态点击无效（2026-11-20 拍板） */
+function toggleFullscreen() {
+  if (focused.value) return
+  fullscreen.value = !fullscreen.value
+}
+
 /** 聚焦楼的楼层告警分桶（选择器行染色/批3 看板与 3D 亮灯共用一份 §3.11 数据） */
 const focusedAlarmMap = computed<Map<string, FloorAlarmSummary>>(() =>
   selectedId.value != null
@@ -321,14 +347,21 @@ const ICONS = {
       />
     </Transition>
 
-    <!-- 中间状态胶囊 + 全屏开关（批3：全屏收起两侧面板，亮灯楼层挂引线小卡） -->
+    <!-- 中间状态胶囊（状态+全屏合一，批3 收尾）：全景态显示「园区环境正常/异常」
+         （异常=系统运行状态：场景加载失败/告警主链断），点击进出全屏（隐藏/显示面板）
+         ——全屏态亮灯楼层挂引线小卡；楼栋/楼层聚焦态只作状态指示、动作字隐藏且
+         点击无效（2026-11-20 拍板） -->
     <div class="status-bar">
-      <div class="status-tag">
+      <button
+        type="button"
+        class="status-tag"
+        :class="{ abnormal: campusAbnormal, locked: focused }"
+        @click="toggleFullscreen"
+      >
         <span class="pulse-dot" />
-        <span>医院环境正常</span>
-      </div>
-      <button type="button" class="fs-btn" @click="fullscreen = !fullscreen">
-        {{ fullscreen ? '退出全屏' : '全屏' }}
+        <span>{{ statusText }}</span>
+        <!-- 聚焦态点击无效，动作提示字一并隐藏（2026-11-20 拍板） -->
+        <span v-if="!focused" class="fs-label">{{ fullscreen ? '显示面板' : '隐藏面板' }}</span>
       </button>
     </div>
 
@@ -510,24 +543,35 @@ const ICONS = {
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 8px 20px rgba(43, 108, 160, 0.12);
   font-size: 14px;
+  font-family: inherit;
   font-weight: 600;
   color: var(--title);
-}
-.fs-btn {
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 8px 20px rgba(43, 108, 160, 0.12);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--primary);
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-.fs-btn:hover {
-  background: rgba(43, 124, 227, 0.1);
+.status-tag:hover {
+  background: rgba(255, 255, 255, 0.95);
 }
-.fs-btn:focus-visible {
+/* 聚焦态只作状态指示：点击无效（toggleFullscreen 守卫），光标与悬停反馈一并收起 */
+.status-tag.locked {
+  cursor: default;
+}
+.status-tag.locked:hover {
+  background: rgba(255, 255, 255, 0.82);
+}
+/* 右侧全屏动作提示字（与状态文字用竖线分隔、主题蓝区分） */
+.fs-label {
+  margin-left: 2px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(43, 124, 227, 0.28);
+  color: var(--primary);
+}
+/* 存在未处理紧急/严重告警 → 呼吸点转红 */
+.status-tag.abnormal .pulse-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(229, 72, 77, 0.16);
+}
+.status-tag:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
