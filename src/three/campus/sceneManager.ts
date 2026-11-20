@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import { floorKeyOfNode } from './buildings'
 import type { CampusBuildingConfig } from './buildings'
 import type { CampusLayout } from '../../config/campusConfig'
@@ -27,16 +28,16 @@ const SIDE_PANEL_PX = 430
 /** 主光位置 = 太阳方向 × 距离（福永 CAMPUS_KEY_LIGHT_POS 同款派生） */
 const KEY_LIGHT_POS = CAMPUS_SUN_DIR.clone().multiplyScalar(CAMPUS_SUN_DIST)
 
-export interface FloorAlarmAnchor {
+/** 园区全屏楼层告警引线卡输入（HTML 由页面组装，楼层键为契约 floor 字符串） */
+export interface FloorAlarmCalloutInput {
+  id: string
   buildingId: number
   floorKey: string
-  /** 告警等级（1 紧急 / 2 严重；同层多条取更高） */
-  level: number
-  /** 屏幕坐标（container 布局尺寸系——规避 App transform:scale 的 rect 缩放差） */
-  x: number
-  y: number
-  /** 锚点在屏幕左/右半（引线卡往反侧伸，避免遮楼） */
-  side: 'left' | 'right'
+  tone: 'error' | 'warn'
+  /** 同屏多枚时卡片垂直错层（px） */
+  shift: number
+  /** 卡片内部 HTML（dot/leader/card 结构，样式见 src/styles/theme.css .floor-callout） */
+  html: string
 }
 
 export interface CampusSceneCallbacks {
@@ -77,6 +78,16 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   renderer.shadowMap.type = THREE.PCFShadowMap
   container.appendChild(renderer.domElement)
   renderer.domElement.style.display = 'block'
+
+  // CSS2D 覆盖层（全屏告警引线卡，福永 LabelManager 同机制）：three.js 每帧把场景内
+  // CSS2DObject 投影到本层——与 canvas 同容器同像素系，App transform:scale 对两者
+  // 一体缩放，不存在布局/视觉坐标换算，从根上消灭手动投影对不齐的坑。
+  // z=6 在楼名标签层（z5）之上；pointer-events none 不挡交互。
+  const css2d = new CSS2DRenderer()
+  css2d.setSize(container.clientWidth, container.clientHeight)
+  css2d.domElement.style.cssText =
+    'position:absolute;top:0;left:0;pointer-events:none;overflow:hidden;z-index:6;'
+  container.appendChild(css2d.domElement)
 
   const controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
@@ -130,6 +141,15 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   // ---- 渲染循环 ----
   let raf = 0
   let disposed = false
+  // 全屏告警引线卡状态（声明上移：tick 内要用，见下方「全屏告警引线卡」区块）
+  let calloutPayload: FloorAlarmCalloutInput[] = []
+  let calloutsWanted = false
+  let entranceDone = false
+  let growStarted = false
+  /** 引线卡组（整树显隐——three 0.186 CSS2DRenderer 支持父链 visible 隐藏） */
+  const calloutGroup = new THREE.Group()
+  calloutGroup.name = 'floor-alarm-callouts'
+  scene.add(calloutGroup)
   /** 进场生长动画队列（福永 growBuildings 同款）：全部就绪后逐栋错峰升起 */
   const growQueue: { holder: THREE.Group; startAt: number }[] = []
   /** smootherstep 缓动（福永同款） */
@@ -206,8 +226,15 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         controls.enabled = true
       }
     }
+    // 进场生长播完（growStarted 后队列清空）→ 引线卡此刻才挂：锚点 side 按就位
+    // 真机位算，且生长中的压扁楼不该顶着一堆卡
+    if (growStarted && !entranceDone && growQueue.length === 0) {
+      entranceDone = true
+      rebuildFloorAlarmCallouts()
+    }
     controls.update()
     renderer.render(scene, camera)
+    css2d.render(scene, camera)
     raf = requestAnimationFrame(tick)
   }
   // 渲染循环不在此启动：等楼栋全部加载、相机按真实包围盒就位后再开（见加载 IIFE 尾部）——
@@ -220,6 +247,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     camera.aspect = w / h
     camera.updateProjectionMatrix()
     renderer.setSize(w, h)
+    css2d.setSize(w, h)
   }
   const ro = new ResizeObserver(onResize)
   ro.observe(container)
@@ -358,6 +386,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     grown.forEach((holder, i) => growQueue.push({ holder, startAt: t0 + GROW_DELAY + i * GROW_STAGGER }))
     // 相机就位后才开渲染循环：首帧即最终构图
     raf = requestAnimationFrame(tick)
+    growStarted = true
     cb.onReady?.()
   })()
 
@@ -388,6 +417,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     renderer.dispose()
     renderer.forceContextLoss?.()
     renderer.domElement.remove()
+    css2d.domElement.remove()
   }
 
   /** mesh 是否在某个楼栋子树内（楼栋根 name = building-{id}） */
@@ -552,7 +582,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     flyTo(pos, tg)
   }
 
-  // ---- 楼层交互（二期批1）：楼层清单 / 楼层聚焦（下钻）/ 楼层拾取 / 告警锚点 ----
+  // ---- 楼层交互（二期批1）：楼层清单 / 楼层聚焦（下钻）/ 楼层拾取 ----
 
   /** 楼层聚焦视觉参数：pop 横向放大系数 / 其余层压暗系数 / 选中层主题蓝 */
   const FLOOR_POP_SCALE = 1.06
@@ -565,7 +595,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   /** pop 前 scale（退出还原） */
   const popOrig = new Map<THREE.Object3D, THREE.Vector3>()
   /** 告警楼层表："{buildingId}|{floorKey}" → level（同层多条取更高=数值更小）。
-   *  引线卡锚点按楼层从 floorWorldBoxes 取静态盒中心 */
+   *  引线卡锚点按同表楼层取静态盒（getCalloutFloorBox） */
   const alarmFloorLevels = new Map<string, number>()
   /** 当前聚焦楼层（契约键；null = 楼栋聚焦态未选层） */
   let focusedFloor: string | null = null
@@ -714,82 +744,92 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     return null
   }
 
-  /** 告警楼层引线卡锚点（每次调用现算投影——供页面 rAF 轮询渲染卡）：
-   *  锚点 = 楼层静态世界盒中心（glbLoader 摆位后算定，与楼名标签/聚焦取景同源已验证）；
-   *  遮挡剔除：相机→锚点射线在到达前先命中其它可见楼的包围盒（该层被前排楼挡住、
-   *  看不清）就不出卡。 */
-  let diagNext = 0
-  function getFloorAlarmAnchors(): FloorAlarmAnchor[] {
-    const out: FloorAlarmAnchor[] = []
-    if (!alarmFloorLevels.size) return out
-    const W = Math.max(container.clientWidth, 1)
-    const H = Math.max(container.clientHeight, 1)
-    const camPos = camera.position
-    const dir = new THREE.Vector3()
-    const hit = new THREE.Vector3()
-    const ray = new THREE.Ray()
-    for (const [key, level] of alarmFloorLevels) {
-      const sep = key.indexOf('|')
-      const bid = Number(key.slice(0, sep))
-      const floorKey = key.slice(sep + 1)
-      const root = buildingRoots.get(bid)
-      const floorBox = floorWorldBoxes.get(bid)?.get(floorKey)
-      if (!root || !root.visible || !floorBox) continue
-      const anchor = floorBox.getCenter(new THREE.Vector3())
-      dir.copy(anchor).sub(camPos)
-      const distAnchor = dir.length()
-      if (distAnchor < 1) continue
-      ray.set(camPos, dir.divideScalar(distAnchor))
-      // 遮挡剔除：其它可见楼的包围盒先于锚点命中 → 被挡，跳过
-      let occluded = false
-      for (const [obid, obox] of buildingBoxes) {
-        if (obid === bid || !buildingRoots.get(obid)?.visible) continue
-        if (ray.intersectBox(obox, hit) && hit.distanceTo(camPos) < distAnchor - 1) {
-          occluded = true
-          break
-        }
-      }
-      if (occluded) continue
-      v3.copy(anchor).project(camera)
-      if (v3.z > 1) continue
-      const x = (v3.x * 0.5 + 0.5) * W
-      const y = (-v3.y * 0.5 + 0.5) * H
-      out.push({ buildingId: bid, floorKey, level, x, y, side: x < W / 2 ? 'left' : 'right' })
+  // ---- 全屏告警引线卡（福永 floorCallouts 同机制，宝中重写）：
+  //  场景内挂 CSS2DObject，投影由 CSS2DRenderer 每帧自算——圆点就是它挂在楼立面上的
+  //  世界锚点，与 canvas 同容器同像素系，没有手动屏幕坐标换算这一环。页面只在数据/
+  //  全屏态变化时整组重建（不逐帧轮询）；进场生长播完才挂（福永 campusEntranceDone
+  //  同款——锚点 side 按就位真机位算）。福永不做遮挡剔除，同口径从简。
+
+  /** 全量替换引线卡（空数组 = 清掉） */
+  function setFloorAlarmCallouts(items: FloorAlarmCalloutInput[]) {
+    calloutPayload = items
+    calloutsWanted = items.length > 0
+    rebuildFloorAlarmCallouts()
+  }
+
+  function rebuildFloorAlarmCallouts() {
+    for (const child of [...calloutGroup.children]) child.removeFromParent()
+    calloutGroup.visible = false
+    if (!calloutsWanted || !entranceDone) return
+    calloutGroup.visible = true
+    camera.updateMatrixWorld()
+    for (const it of calloutPayload) {
+      const bb = getCalloutFloorBox(it.buildingId, it.floorKey)
+      if (!bb) continue
+      const side = screenSideOfBox(bb)
+      const pos = getFloorFacadePointFromBox(bb, side === 'left' ? 0.32 : 0.68, 0.98)
+      if (!pos) continue
+      const el = document.createElement('div')
+      el.className = `floor-callout is-${side} tone-${it.tone}`
+      el.style.setProperty('--callout-shift', `${it.shift}px`)
+      el.innerHTML = it.html
+      const obj = new CSS2DObject(el)
+      obj.position.copy(pos)
+      calloutGroup.add(obj)
     }
-    // TODO-REMOVE(诊断): 每 10 秒一行——「标签DOM vs 同点投影」交叉验证 + 各锚点屏幕位
-    if (performance.now() > diagNext) {
-      diagNext = performance.now() + 10_000
-      const parts: string[] = []
-      for (const [bid, bb] of buildingBoxes) {
-        const el = labelEls.get(bid)
-        if (!el) continue
-        const c = bb.getCenter(new THREE.Vector3())
-        c.y = bb.max.y + 8
-        v3.copy(c).project(camera)
-        parts.push(
-          `楼${bid}标签(${el.style.left},${el.style.top})同点投影(${((v3.x * 0.5 + 0.5) * W).toFixed(0)},${((-v3.y * 0.5 + 0.5) * H).toFixed(0)})`,
-        )
-      }
-      const pts = out
-        .map((a) => `${a.buildingId}|${a.floorKey}→(${a.x.toFixed(0)},${a.y.toFixed(0)})`)
-        .join(' ')
-      console.warn('[诊断]', parts.join(' '), '|| 锚点:', pts, `viewport=${W}x${H}`)
-      // TODO-REMOVE(诊断): 每个锚点像素处的视觉命中（终极判定：圆点钉没钉在正确楼层上）
-      // ⚠ 锚点坐标是容器布局系（1920），外层缩放后需换算成客户坐标再射线检测
-      const rect = renderer.domElement.getBoundingClientRect()
-      const sx = rect.width / Math.max(W, 1)
-      const sy = rect.height / Math.max(H, 1)
-      const hits = out.map((a) => {
-        const cx = rect.left + a.x * sx
-        const cy = rect.top + a.y * sy
-        const fl = pickFloorAt(cx, cy)
-        if (fl) return `${a.buildingId}|${a.floorKey}→命中 楼${fl.buildingId}-${fl.floor}F ${fl.buildingId === a.buildingId && fl.floor === a.floorKey ? '✓' : '✗错楼'}`
-        const b = pickBuildingAt(cx, cy)
-        return `${a.buildingId}|${a.floorKey}→命中 ${b ? `楼${b}(非楼层点)` : '空白'} ${b === a.buildingId ? '~同楼非层' : ''}`
-      })
-      console.warn('[视觉命中]', hits.join('  '))
-    }
-    return out
+  }
+
+  /** 引线卡锚点用楼层盒：XZ 取楼层静态盒与楼体真盒交集（防附属件撑大盒），y 用楼层盒 */
+  function getCalloutFloorBox(buildingId: number, floorKey: string) {
+    const fb = floorWorldBoxes.get(buildingId)?.get(floorKey)
+    const fp = buildingBoxes.get(buildingId)
+    if (!fb || !fp) return null
+    const minX = Math.max(fb.min.x, fp.min.x)
+    const maxX = Math.min(fb.max.x, fp.max.x)
+    const minZ = Math.max(fb.min.z, fp.min.z)
+    const maxZ = Math.min(fb.max.z, fp.max.z)
+    if (maxX - minX <= 0 || maxZ - minZ <= 0) return null
+    return { minX, maxX, minZ, maxZ, minY: fb.min.y, maxY: fb.max.y }
+  }
+
+  /** 盒中心投 NDC 判屏幕左右半（卡片往外侧伸，避免遮楼） */
+  function screenSideOfBox(bb: {
+    minX: number
+    maxX: number
+    minY: number
+    maxY: number
+    minZ: number
+    maxZ: number
+  }): 'left' | 'right' {
+    v3.set((bb.minX + bb.maxX) / 2, (bb.minY + bb.maxY) / 2, (bb.minZ + bb.maxZ) / 2).project(camera)
+    return v3.x >= 0 ? 'right' : 'left'
+  }
+
+  /** 朝相机的立面锚点（福永 getFloorFacadePointFromBox 同款）：edgeU 沿立面横向 0..1，
+   *  faceScale 沿视线比例（0.98=贴立面微内收） */
+  function getFloorFacadePointFromBox(
+    bb: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number },
+    edgeU: number,
+    faceScale: number,
+  ): THREE.Vector3 {
+    const cy = (bb.minY + bb.maxY) / 2
+    const center = new THREE.Vector3((bb.minX + bb.maxX) * 0.5, cy, (bb.minZ + bb.maxZ) * 0.5)
+    const dir = new THREE.Vector3().subVectors(camera.position, center)
+    dir.y = 0
+    if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1)
+    else dir.normalize()
+    const halfX = (bb.maxX - bb.minX) * 0.5
+    const halfZ = (bb.maxZ - bb.minZ) * 0.5
+    const tX = Math.abs(dir.x) > 1e-6 ? halfX / Math.abs(dir.x) : Number.POSITIVE_INFINITY
+    const tZ = Math.abs(dir.z) > 1e-6 ? halfZ / Math.abs(dir.z) : Number.POSITIVE_INFINITY
+    const onFace = center.addScaledVector(dir, Math.min(tX, tZ) * faceScale)
+    const perp = new THREE.Vector3(-dir.z, 0, dir.x)
+    const halfLat = (tX < tZ ? halfZ : halfX) * 0.72
+    onFace.addScaledVector(perp, (THREE.MathUtils.clamp(edgeU, 0, 1) - 0.5) * 2 * halfLat)
+    onFace.x = THREE.MathUtils.clamp(onFace.x, bb.minX + halfX * 0.06, bb.maxX - halfX * 0.06)
+    onFace.y = cy
+    onFace.z = THREE.MathUtils.clamp(onFace.z, bb.minZ + halfZ * 0.06, bb.maxZ - halfZ * 0.06)
+    return onFace
   }
 
   // ---- 数据联动（批3）：楼名标签 kWh + 告警楼层亮灯 ----
@@ -859,7 +899,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     getFloors,
     focusFloor,
     backToBuilding,
-    getFloorAlarmAnchors,
+    setFloorAlarmCallouts,
     setBuildingEnergy,
     setBuildingAlarms,
   }

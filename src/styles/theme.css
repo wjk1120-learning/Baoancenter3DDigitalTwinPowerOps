@@ -742,3 +742,142 @@ body {
   .n-base-selection__state-border {
   border-color: var(--border-strong);
 }
+
+/* ============ 全屏 3D 告警楼层引线卡（福永 floor-callout 同款移植） ============
+   元素由引擎（sceneManager setFloorAlarmCallouts）以 CSS2DObject 挂进场景，每帧由
+   three.js 自投影到覆盖层——圆点恒钉在楼立面世界锚点上，样式因此必须放全局。 */
+.floor-callout {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  font-family: var(--font-sans);
+  --callout-shift: 0px;
+  --leader-len: 64px;
+  --tone: #e53e3e;
+}
+.floor-callout.tone-warn {
+  --tone: #ed8936;
+}
+.floor-callout__dot {
+  position: absolute;
+  display: block;
+  font-style: normal;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tone);
+  border: 2px solid #fff;
+  z-index: 2;
+}
+.floor-callout__leader {
+  position: absolute;
+  top: -1px;
+  height: 2px;
+  width: var(--leader-len);
+  z-index: 1;
+}
+.floor-callout.is-right .floor-callout__leader {
+  left: 0;
+  transform-origin: left center;
+  transform: rotate(-48deg);
+}
+.floor-callout.is-left .floor-callout__leader {
+  left: calc(-1 * var(--leader-len));
+  transform-origin: right center;
+  transform: rotate(-48deg);
+}
+.floor-callout__card {
+  position: absolute;
+  bottom: calc(46px + var(--callout-shift));
+  z-index: 3;
+  width: 196px;
+  padding: 8px 10px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, #fff);
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+}
+.floor-callout.is-right .floor-callout__card {
+  left: 40px;
+}
+.floor-callout.is-left .floor-callout__card {
+  right: 40px;
+  left: auto;
+}
+.floor-callout__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.floor-callout__grade {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--tone);
+}
+.floor-callout__where {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.floor-callout__time {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.floor-callout__text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--title);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.floor-callout__more {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+/* 呼吸圆点 + 卡片描边呼吸（与 3D 亮灯同色系：紧急红 / 严重琥珀） */
+.floor-callout.tone-error .floor-callout__dot {
+  box-shadow: 0 0 10px 3px rgba(229, 62, 62, 0.55);
+  animation: fc-dot 1.35s ease-in-out infinite;
+}
+.floor-callout.tone-warn .floor-callout__dot {
+  box-shadow: 0 0 10px 3px rgba(237, 137, 54, 0.55);
+  animation: fc-dot 1.55s ease-in-out infinite;
+}
+.floor-callout .floor-callout__leader {
+  background: linear-gradient(90deg, var(--tone), color-mix(in srgb, var(--tone) 35%, transparent));
+}
+.floor-callout.is-left .floor-callout__leader {
+  background: linear-gradient(270deg, var(--tone), color-mix(in srgb, var(--tone) 35%, transparent));
+}
+@keyframes fc-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 10px 3px color-mix(in srgb, var(--tone) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 2px 1px color-mix(in srgb, var(--tone) 18%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floor-callout .floor-callout__dot {
+    animation: none;
+  }
+}

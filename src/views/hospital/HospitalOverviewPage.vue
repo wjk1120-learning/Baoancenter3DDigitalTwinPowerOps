@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchEnergyToday } from '../../api/energy/energy'
 import { fetchUnhandledEvents } from '../../api/event/event'
@@ -12,11 +12,10 @@ import SceneLoadBar from './SceneLoadBar.vue'
 import BuildingInfoCard from './BuildingInfoCard.vue'
 import FloorPanel from './FloorPanel.vue'
 import FloorBoard from './FloorBoard.vue'
-import FloorAlarmCallouts from './FloorAlarmCallouts.vue'
-import { summarizeFloorAlarms } from './floorAlarmState'
+import { buildFloorCalloutItems, summarizeFloorAlarms } from './floorAlarmState'
 import type { FloorAlarmSummary } from './floorAlarmState'
 import { createCampusScene } from '../../three/campus/sceneManager'
-import type { FloorAlarmAnchor } from '../../three/campus/sceneManager'
+import type { FloorAlarmCalloutInput } from '../../three/campus/sceneManager'
 import { CAMPUS_BUILDINGS, CAMPUS_LAYOUT } from '../../config/campusConfig'
 import type { AlertItem } from '../../api/hospital/types'
 
@@ -58,7 +57,7 @@ let scene: {
   focusFloor(buildingId: number, floor: string): void
   backToBuilding(): void
   getFloors(buildingId: number): string[]
-  getFloorAlarmAnchors(): FloorAlarmAnchor[]
+  setFloorAlarmCallouts(items: FloorAlarmCalloutInput[]): void
   setBuildingEnergy(kwhById: Map<number, number>): void
   setBuildingAlarms(alarms: { buildingId: number; floorKey: string; level: number }[]): void
 } | null = null
@@ -124,10 +123,16 @@ const onKeydown = (ev: KeyboardEvent) => {
   else if (fullscreen.value) fullscreen.value = false
 }
 
-/** 全屏态告警楼层锚点（引擎每帧现算的屏幕投影；Callout 组件 rAF 轮询渲染） */
-function getAnchors(): FloorAlarmAnchor[] {
-  return scene?.getFloorAlarmAnchors() ?? []
+/** 全屏态告警引线卡（福永 floorCallouts 同机制）：只在全景全屏态整组喂引擎重建。
+ *  圆点由引擎 CSS2D 每帧自投影（挂楼立面世界锚点），页面不再算任何屏幕坐标。 */
+function syncFloorCallouts() {
+  scene?.setFloorAlarmCallouts(
+    fullscreen.value && selectedId.value == null
+      ? buildFloorCalloutItems(unhandledAlerts.value)
+      : [],
+  )
 }
+watch([fullscreen, selectedId], syncFloorCallouts)
 
 // ---- 数据联动：楼名 kWh + 告警楼层亮灯/染色 ----
 const NAME_TO_ID = new Map(CAMPUS_BUILDINGS.map((b) => [b.name, b.id]))
@@ -163,6 +168,8 @@ async function refreshBuildingAlarms() {
     }
   }
   scene.setBuildingAlarms(alarms)
+  // 数据变化 → 引线卡 payload 重建（引擎内 CSS2D 投影，无屏幕坐标）
+  syncFloorCallouts()
 }
 
 let energyTimer: number | null = null
@@ -324,13 +331,6 @@ const ICONS = {
         {{ fullscreen ? '退出全屏' : '全屏' }}
       </button>
     </div>
-
-    <!-- 全屏态告警楼层引线小卡（锚点每帧现算；只展示不点击） -->
-    <FloorAlarmCallouts
-      v-if="fullscreen && selectedId == null"
-      :get-anchors="getAnchors"
-      :alerts="unhandledAlerts"
-    />
 
     <!-- 左侧浮动面板列（全屏态滑出屏幕） -->
     <aside class="side left" :class="{ 'side-hidden': focused, 'side-out': fullscreen && !focused }">
