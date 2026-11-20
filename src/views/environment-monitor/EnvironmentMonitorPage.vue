@@ -1,83 +1,84 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onUnmounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { fetchCameraList } from '../../api/ezviz/ezviz'
 import type { CameraVo } from '../../api/ezviz/types'
-import { isInternalStaff } from '../../utils/operationsAccess'
-import { readAuthUser } from '../../utils/session'
 import CameraCard from './components/CameraCard.vue'
-import CameraLedgerDrawer from './components/CameraLedgerDrawer.vue'
 import PlaybackModal from './components/PlaybackModal.vue'
 
 /**
- * 环境监控（§6 萤石视频墙，所有人可见；台账管理入口仅内部人员）：
- * - 台账 §6.1 拉取 + 激活期 300s 轮询（后端每轮逐台外呼萤石云查在线状态，5 分钟粒度
- *   对后端/萤石限流友好）+ 工具条手动刷新；轮询即失败重试：每次刷新清空失败名单，
- *   中途恢复的摄像头自动回来补位
- * - 「无画面隐藏」：online 非 true（离线/查询失败未知）不渲染；取流失败或播放器无画面
- *   （CameraCard 的 broken）记入失败名单，卡片消失其余补位
- * - 页签停流：页签即路由（App.vue keep-alive），页面的轮询随 onDeactivated 停、
- *   onActivated 恢复；拉流起停由 CameraCard 自己随激活传播处理
- * - 「摄像头管理」仅内部人员可见（userLevel !== 2，与后端 §6.2-6.4 的 403 口径对齐），
- *   按钮是抽屉唯一入口，挡按钮即挡功能
+ * 环境监控（§6 萤石视频墙，所有人可见）：
+ * - 进页/手动刷新 = 一轮「探测」：§6.1 拉台账 → online!==true 直接淘汰 → 存活者并发
+ *   §6.5 取流建播放器（卡片已在墙内、被加载遮罩盖住）→ 首帧 ok / 取流失败 / 播放器
+ *   报错 / 9s 无首帧，四种 settle 回报页面 → 全部 settle 撤遮罩，只留真实出画面的卡
+ * - 「无画面不出现」：没出过首帧的摄像头从头到尾不可见；停留期中断流的卡直接消失
+ * - 无轮询：探测完成后停留期零自动请求；重新探测 = 重进页面（keep-alive 切回也算）
+ *   或点「刷新」。台账增删改移配置中心（页面不再有管理入口）
+ * - 探测竞态：重探测整墙重建（卡片 key 带轮次），旧一轮卡片卸载后不再上报事件
+ *   （CameraCard 的 disposed guard），不会污染新一轮名单
  */
 defineOptions({ name: 'EnvironmentMonitorPage' })
 
-/** 台账轮询周期（仅页面激活期运行） */
-const POLL_INTERVAL_MS = 300_000
-
+/** 探测轮次（只增不减）：进模板 key 使重探测整墙重建，同时充当旧轮事件的失效序号 */
+const round = ref(0)
+/** 本轮探测候选（online===true），settle 后收窄为真实出画面名单 */
 const cameras = ref<CameraVo[]>([])
-const loading = ref(false)
-/** 本轮周期内取流/播放失败的摄像头：不再渲染；轮询/手动刷新时清空重试 */
+/** 探测中：视频墙盖加载遮罩、刷新按钮禁用 */
+const probing = ref(false)
+/** 已判死的摄像头：探测中隐藏、settle 后剔除；播放在途中断流同样隐藏 */
 const brokenIds = ref<Set<number>>(new Set())
-/** 台账管理抽屉（CameraLedgerDrawer，批次 5 接入） */
-const ledgerOpen = ref(false)
+/** 本轮已 settle（出画面或判死）的台账 id：每台只计首次，防 ok 后断流重复计数 */
+const settledIds = new Set<number>()
 /** 回放弹窗目标（§6.6） */
 const playbackCamera = ref<CameraVo | null>(null)
 
-/** 「摄像头管理」入口显隐：TopBar 同款非响应式读取（登录态变化靠整页刷新生效） */
-const isInternal = isInternalStaff(readAuthUser())
+/** 视频墙名单：探测中=全部候选（被遮罩盖住），探测完=出画面且未中断的 */
+const visibleCameras = computed(() => cameras.value.filter((c) => !brokenIds.value.has(c.id)))
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
-
-async function loadCameras() {
-  loading.value = true
+/** 一轮完整探测。台账拉取失败按空态静默收场（§6.1 silent，无全局报错） */
+async function probeAll() {
+  const seq = ++round.value
+  probing.value = true
+  cameras.value = []
+  brokenIds.value = new Set()
+  settledIds.clear()
+  let ledger: CameraVo[]
   try {
-    cameras.value = await fetchCameraList()
-    brokenIds.value = new Set()
+    ledger = await fetchCameraList()
   } catch {
-    // 拉取失败保留旧台账与失败名单，等待下轮轮询/手动重试（silent 接口不弹全局错误）
-  } finally {
-    loading.value = false
+    if (seq === round.value) probing.value = false
+    return
   }
+  if (seq !== round.value) return
+  cameras.value = ledger.filter((c) => c.online === true)
+  if (cameras.value.length === 0) probing.value = false
+}
+
+/** 卡片 settle 上报：ok=已出画面；broken=取流失败/无首帧/播放中断 */
+function markOk(id: number) {
+  if (!probing.value || settledIds.has(id)) return
+  settledIds.add(id)
+  settleCheck()
 }
 
 function markBroken(id: number) {
   brokenIds.value = new Set(brokenIds.value).add(id)
+  if (!probing.value || settledIds.has(id)) return
+  settledIds.add(id)
+  settleCheck()
 }
 
-/** 在线且未在失败名单的摄像头（无画面三态：离线/未知不渲染，坏流隐藏补位） */
-const visibleCameras = computed(() =>
-  cameras.value.filter((c) => c.online === true && !brokenIds.value.has(c.id)),
-)
-
-function startPoll() {
-  if (pollTimer != null) return
-  pollTimer = setInterval(() => void loadCameras(), POLL_INTERVAL_MS)
-}
-function stopPoll() {
-  if (pollTimer != null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+/** 全部候选 settle：撤遮罩，名单收窄为真实出画面的摄像头 */
+function settleCheck() {
+  if (!probing.value || settledIds.size < cameras.value.length) return
+  cameras.value = cameras.value.filter((c) => !brokenIds.value.has(c.id))
+  brokenIds.value = new Set()
+  probing.value = false
 }
 
-// onActivated 首次紧跟挂载（AlertCenterPage 同款），激活期才拉数+轮询
+// keep-alive 激活即重探测：进页与切回页签同口径（onActivated 首次紧跟挂载，AlertCenterPage 同款）
 onActivated(() => {
-  void loadCameras()
-  startPoll()
+  void probeAll()
 })
-onDeactivated(stopPoll)
-onUnmounted(stopPoll)
 </script>
 
 <template>
@@ -92,17 +93,11 @@ onUnmounted(stopPoll)
       <header class="em-header glass-panel">
         <div class="em-title">
           <h2>环境监控</h2>
-          <span class="em-sub">
-            在线画面 <b class="num">{{ visibleCameras.length }}</b> / 台账
-            <b class="num">{{ cameras.length }}</b>
-          </span>
+          <span class="em-sub">实时查看各区域摄像头画面，支持抓拍与录像回放</span>
         </div>
         <div class="em-actions">
-          <button class="em-btn" :disabled="loading" @click="loadCameras()">
-            {{ loading ? '刷新中…' : '刷新' }}
-          </button>
-          <button v-if="isInternal" class="em-btn em-btn-primary" @click="ledgerOpen = true">
-            摄像头管理
+          <button class="em-btn" :disabled="probing" @click="probeAll()">
+            {{ probing ? '检测中…' : '刷新' }}
           </button>
         </div>
       </header>
@@ -110,20 +105,24 @@ onUnmounted(stopPoll)
       <main class="em-wall">
         <CameraCard
           v-for="c in visibleCameras"
-          :key="c.id"
+          :key="`${round}-${c.id}`"
           :camera="c"
           @broken="markBroken"
+          @ok="markOk"
           @playback="playbackCamera = $event"
         />
-        <div v-if="!loading && visibleCameras.length === 0" class="em-empty">
+        <div v-if="!probing && visibleCameras.length === 0" class="em-empty">
           暂无可用监控画面
+        </div>
+        <!-- 探测遮罩：盖住墙内建中的播放器，全部 settle 才撤 -->
+        <div v-if="probing" class="em-probing">
+          <span class="em-probing-spin" aria-hidden="true" />
+          <span class="em-probing-text">正在检测摄像头连接…</span>
         </div>
       </main>
     </div>
 
     <PlaybackModal :camera="playbackCamera" @close="playbackCamera = null" />
-    <!-- 台账增删改仅内部人员可达（入口按钮已挡）；changed → 重拉台账联动视频墙 -->
-    <CameraLedgerDrawer :open="ledgerOpen" @close="ledgerOpen = false" @changed="loadCameras()" />
   </div>
 </template>
 
@@ -208,10 +207,6 @@ onUnmounted(stopPoll)
   font-size: 13px;
   color: var(--muted);
 }
-.em-sub b {
-  color: var(--primary);
-  font-weight: 700;
-}
 .em-actions {
   margin-left: auto;
   display: flex;
@@ -256,6 +251,7 @@ onUnmounted(stopPoll)
 }
 
 .em-wall {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -275,5 +271,36 @@ onUnmounted(stopPoll)
   color: var(--muted);
   font-size: 15px;
   letter-spacing: 1px;
+}
+
+/* 探测遮罩：不透明盖住墙内建中的播放器，settle 完才撤 */
+.em-probing {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: linear-gradient(165deg, var(--bg-1), var(--bg-2));
+}
+.em-probing-spin {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--primary-200);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: em-spin 0.9s linear infinite;
+}
+.em-probing-text {
+  color: var(--muted);
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+@keyframes em-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

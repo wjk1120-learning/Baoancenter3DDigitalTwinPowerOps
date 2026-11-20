@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onActivated, onDeactivated, onMounted, ref } from 'vue'
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { captureCamera, fetchCameraLiveUrl } from '../../../api/ezviz/ezviz'
 import type { CameraVo, PlayUrlVo } from '../../../api/ezviz/types'
 import { globalMessage } from '../../../utils/message'
@@ -7,23 +7,35 @@ import CameraPlayer from '../../../components/CameraPlayer.vue'
 
 /**
  * 视频墙单卡：按台账项取流（§6.5，protocol=1 + quality=2 流畅）喂给 CameraPlayer。
- * 失败口径三来源统一上报 broken（父页记失败名单隐藏卡片、其余补位）：
- * 取流接口失败 / 取流结果缺 url·accessToken / 播放器无画面（CameraPlayer 的 error）。
+ * settle 口径三来源统一上报父页：取流接口失败 / 取流结果缺 url·accessToken / 播放器
+ * 无画面（CameraPlayer 的 error）→ broken；首帧出画（CameraPlayer 的 ok）→ ok。
+ * 父页以 ok/broken 统计探测进度，settle 完只留 ok 的卡（探测判死的不出现、
+ * 播放在途中断流的直接隐藏，重进页面或刷新才重试）。
  * 页签切走 stop、切回 play：本卡片在页面 keep-alive 组件树内，activated/deactivated
- * 会传播到卡片；流地址不重取（失效由播放器 error → broken → 台账轮询重试闭环，
- * 避免每次切页签整墙重取流闪烁）。
+ * 会传播到卡片；流地址不重取（避免每次切页签整墙重取流闪烁）。
  * 悬浮工具条：抓拍（§6.7，返回图有时效仅当场看，预览盖在卡内）/ 回放（页面级弹窗）。
  */
 defineOptions({ name: 'CameraCard' })
 
-const props = defineProps<{ camera: CameraVo }>()
+const props = defineProps<{
+  camera: CameraVo
+  /** 首帧等待上限（ms）：探测轮传 9000 收紧判死，回放等默认 20000 */
+  firstFrameTimeoutMs?: number
+}>()
 const emit = defineEmits<{
   (e: 'broken', id: number): void
+  (e: 'ok', id: number): void
   (e: 'playback', camera: CameraVo): void
 }>()
 
 const playUrl = ref<PlayUrlVo | null>(null)
 const playerRef = ref<InstanceType<typeof CameraPlayer> | null>(null)
+
+/** 卸载后不再上报事件：重探测整墙重建时，旧卡在途的取流响应不得污染新一轮名单 */
+let disposed = false
+onBeforeUnmount(() => {
+  disposed = true
+})
 
 /** 抓拍：capturing 防重入；返回的托管图 URL 有时效，仅当场预览不转存 */
 const capturing = ref(false)
@@ -32,11 +44,19 @@ const captureUrl = ref('')
 async function loadStream() {
   try {
     const vo = await fetchCameraLiveUrl(props.camera.id)
+    if (disposed) return
     if (vo && vo.url && vo.accessToken) playUrl.value = vo
     else emit('broken', props.camera.id)
   } catch {
+    if (disposed) return
     emit('broken', props.camera.id)
   }
+}
+
+/** 播放器报错/超时无画面（含播放在途中断流），卸载后忽略 */
+function onPlayerError() {
+  if (disposed) return
+  emit('broken', props.camera.id)
 }
 
 async function onCapture() {
@@ -67,7 +87,13 @@ onDeactivated(() => playerRef.value?.stop())
       </span>
     </div>
     <div class="cam-body">
-      <CameraPlayer ref="playerRef" :play-url="playUrl" @error="emit('broken', camera.id)" />
+      <CameraPlayer
+        ref="playerRef"
+        :play-url="playUrl"
+        :first-frame-timeout-ms="firstFrameTimeoutMs"
+        @ok="emit('ok', camera.id)"
+        @error="onPlayerError"
+      />
       <div class="cam-toolbar">
         <button class="cam-tool" :disabled="capturing" @click="onCapture">
           {{ capturing ? '抓拍中…' : '抓拍' }}

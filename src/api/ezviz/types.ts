@@ -20,13 +20,5 @@ export interface PlayUrlVo {
   accessToken: string
 }
 
-/** §6.2/§6.3 台账新增/修改请求体（修改为全量提交目标状态） */
-export interface CameraSaveBody {
-  deviceSerial: string
-  cameraName: string
-  /** 位置描述（可空） */
-  locationDesc?: string | null
-}
-
 /** §6.6 回放来源：local=设备 SD 卡本地录像 / cloud=云存储录像 */
 export type PlaybackSource = 'local' | 'cloud'

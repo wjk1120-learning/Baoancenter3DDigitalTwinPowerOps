@@ -882,12 +882,17 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         alarmMeshes.set(mesh, { level: a.level, orig, cloned })
         const std = cloned as THREE.MeshStandardMaterial
         if (std.emissive) {
-          std.emissive.setHex(a.level === 1 ? 0xe53e3e : 0xed8936)
+          // 紧急 = 洋红系（2026-11-20 用户参考 #ff4777 定调）：光色与本色同族叠加才纯
+          std.emissive.setHex(a.level === 1 ? 0xff4777 : 0xed8936)
           std.emissiveIntensity = 0.6
         }
         // 楼层聚焦压暗后新亮的告警层：克隆继承的是压暗体色，按原色表还原
         const o2 = dimmedOrig.get(orig)
         if (o2) std.color.setHex(o2.color)
+        // 紧急层楼体本色同染洋红（2026-11-20 用户参考 #ff4777）——白底叠红光经
+        // ACES 观感发粉，本色同族压色后光叠本色，呼吸谷值也保持洋红不回白。
+        // 只改克隆材质（共享原材质不动），灭灯还原走 alarmMeshes.orig
+        if (a.level === 1 && std.color) std.color.setHex(0xd63760)
       })
       alarmFloorLevels.set(key, a.level)
     }

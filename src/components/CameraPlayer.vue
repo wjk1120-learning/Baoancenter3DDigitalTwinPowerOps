@@ -4,7 +4,7 @@ let instanceSeq = 0
 </script>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { EZUIKitPlayer } from 'ezuikit-js'
 import type { PlayUrlVo } from '../api/ezviz/types'
 
@@ -26,6 +26,8 @@ const props = defineProps<{
   playUrl: PlayUrlVo | null
   /** 播放模板：直播 pcLive（默认）/ 回放 pcRec */
   template?: 'pcLive' | 'pcRec'
+  /** 首帧等待上限（ms）：默认 20000；视频墙探测轮传小值收紧判死时间 */
+  firstFrameTimeoutMs?: number
 }>()
 
 const emit = defineEmits<{
@@ -35,8 +37,8 @@ const emit = defineEmits<{
   (e: 'error'): void
 }>()
 
-/** 首帧等待上限：超时按「无画面」上报 */
-const FIRST_FRAME_TIMEOUT_MS = 20_000
+/** 首帧等待上限：超时按「无画面」上报（默认 20s，调用方可传 firstFrameTimeoutMs 收紧） */
+const firstFrameWait = computed(() => props.firstFrameTimeoutMs ?? 20_000)
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const connecting = ref(false)
@@ -45,6 +47,8 @@ const containerId = `ezuikit-player-${++instanceSeq}-${Date.now().toString(36)}`
 let player: EZUIKitPlayer | null = null
 let firstFrameTimer: ReturnType<typeof setTimeout> | null = null
 let okSent = false
+/** 卸载后不再上报 ok/error：销毁后播放器内部回调仍可能触发，不得外泄给父级 */
+let disposed = false
 
 function validUrl(v: PlayUrlVo | null): v is PlayUrlVo {
   return !!v && typeof v.url === 'string' && !!v.url && typeof v.accessToken === 'string' && !!v.accessToken
@@ -61,12 +65,12 @@ function armFirstFrameTimer() {
   clearFirstFrameTimer()
   firstFrameTimer = setTimeout(() => {
     if (!okSent) onBroken()
-  }, FIRST_FRAME_TIMEOUT_MS)
+  }, firstFrameWait.value)
 }
 
 /** 首帧已出画：置 ok 并默认静音（多路同屏默认无声，各卡用播放器自带控件单独开声） */
 function markOk() {
-  if (okSent) return
+  if (okSent || disposed) return
   okSent = true
   clearFirstFrameTimer()
   connecting.value = false
@@ -79,6 +83,7 @@ function markOk() {
 }
 
 function onBroken() {
+  if (disposed) return
   clearFirstFrameTimer()
   connecting.value = false
   emit('error')
@@ -134,7 +139,10 @@ watch(
   },
 )
 
-onBeforeUnmount(destroyPlayer)
+onBeforeUnmount(() => {
+  disposed = true
+  destroyPlayer()
+})
 
 defineExpose({
   /** 停流（页签切走时父级调用） */

@@ -330,6 +330,16 @@ const ICONS = {
       />
     </Transition>
 
+    <!-- 亮灯颜色图例（3D 区左上角=左面板右缘，2026-11-20）：红=紧急 / 琥珀=严重，
+         与楼层亮灯同色系；全屏态面板滑出时随行滑到屏幕左上角；聚焦态隐藏
+         （FloorPanel 从左侧滑入，行染色本身已带状态文字，避免重叠） -->
+    <Transition name="lg">
+      <div v-if="!focused" class="lamp-legend" :class="{ 'legend-out': fullscreen }">
+        <span class="lg-row"><i class="lg-dot lg-warn" />严重告警</span>
+        <span class="lg-row"><i class="lg-dot lg-error" />紧急告警</span>
+      </div>
+    </Transition>
+
     <!-- 楼层告警看板（选层后出现；处理按钮走 §3.10，级联语义；随选择器收起左移） -->
     <Transition name="fb">
       <FloorBoard
@@ -638,6 +648,64 @@ const ICONS = {
   border-radius: 50%;
   background: var(--primary);
   box-shadow: 0 0 0 4px rgba(43, 124, 227, 0.14);
+}
+
+/* 亮灯颜色图例（3D 区左上角=左面板右缘）：色值与引擎 applyAlarms 亮灯色一致
+   （红 e53e3e / 琥珀 ed8936）；无卡片底、大圆点粗字直接浮在画面上（2026-11-20
+   用户样图定稿：严重在上紧急在下）；圆点做灯珠体积感+白描边提蓝天对比，文字
+   加白晕保可读；不挡 3D 拾取；聚焦态 v-if 隐藏；全屏态面板滑出时 left 过渡到
+   屏幕左上角（0.35s 与面板同步） */
+.lamp-legend {
+  position: absolute;
+  left: calc(24px + 380px + 24px);
+  top: calc(var(--topbar-height) + 16px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--title);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+  transition:
+    left 0.35s ease,
+    opacity 0.22s ease;
+}
+.lamp-legend.legend-out {
+  left: 24px;
+}
+.lg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lg-dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -2px 3px rgba(0, 0, 0, 0.22),
+    inset 0 1px 2px rgba(255, 255, 255, 0.45),
+    0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+/* 观感色（2026-11-20 用户要求取「闪到最亮」色）：5 帧连拍扫描亮灯带像素、按饱和度
+   取最亮 12% 求均值——紧急洋红 #fb6b94（引擎本色 #d63760+光 #ff4777 叠加的峰值）、
+   严重琥珀 #f5a623；亮灯呼吸中明暗会摆动，图例取峰值=最显眼时的色 */
+.lg-error {
+  background: #fb6b94;
+}
+.lg-warn {
+  background: #f5a623;
+}
+.lg-enter-active,
+.lg-leave-active {
+  transition: opacity 0.22s ease;
+}
+.lg-enter-from,
+.lg-leave-to {
+  opacity: 0;
 }
 
 /* 信息卡过渡（Transition name=bic 作用在子组件根元素上，mode=out-in）：

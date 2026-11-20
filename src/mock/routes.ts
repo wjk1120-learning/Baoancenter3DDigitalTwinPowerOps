@@ -6,13 +6,10 @@ import {
   mockTodayStr,
 } from './data/event'
 import {
-  addMockCamera,
   cameraRows,
-  deleteMockCamera,
   getMockCaptureUrl,
   getMockLiveUrl,
   getMockPlaybackUrl,
-  updateMockCamera,
 } from './data/ezviz'
 import {
   getBuildingEnergyHistory,
@@ -252,13 +249,6 @@ const routes: MockRoute[] = [
   ),
   // §6.7 抓拍当前画面
   route('POST /ezviz/cameras/:id/capture', ({ params }) => getMockCaptureUrl(Number(params.id))),
-  // §6.2 新增台账（改数据数组，台账抽屉/视频墙联动）
-  route('POST /ezviz/cameras', ({ body }) => addMockCamera(body ?? {})),
-  // §6.3/6.4 修改/删除台账（4 段参数路由与上面 2 段字面路由段数不同，无吞并问题）
-  route('POST /ezviz/cameras/:id/update', ({ params, body }) =>
-    updateMockCamera(Number(params.id), body ?? {}),
-  ),
-  route('POST /ezviz/cameras/:id/delete', ({ params }) => deleteMockCamera(Number(params.id))),
 
   // ── 配置中心（§5.33 数据类型字典：4.2④ 测点抽屉曲线参数列表用）──
   route('GET /configuration/data-types', () => getCetDataTypes()),
