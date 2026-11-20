@@ -767,7 +767,10 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       const bb = getCalloutFloorBox(it.buildingId, it.floorKey)
       if (!bb) continue
       const side = screenSideOfBox(bb)
-      const pos = getFloorFacadePointFromBox(bb, side === 'left' ? 0.32 : 0.68, 0.98)
+      // 福永按屏幕半区取立面偏侧位（0.32/0.68），但福永楼群全正南朝向；宝中行政楼
+      // yaw=π/2 转竖成南北长条，横向偏移会把点推到侧立面棱角（2026-11-20 用户实测
+      // 圆点钉楼角）。固定 0.5 = 点永远在朝相机立面的中心线上，任何朝向都不出楼体
+      const pos = getFloorFacadePointFromBox(bb, 0.5, 0.98)
       if (!pos) continue
       const el = document.createElement('div')
       el.className = `floor-callout is-${side} tone-${it.tone}`
