@@ -23,7 +23,8 @@ export function mockTodayStr(): string {
  * 宝中位置编号只解析出数字/负数（地下），引擎 GF 支持保留为通用能力）：
  *  - 多楼多层（1~6 号楼各层）+ 多位置一条 + 仅 3/4 级样本（不亮灯不进看板）
  *  - 跨日未处理（0109 昨日 / 0110 前日）——§3.11「未处理=活着=亮灯」核心样本
- *  - 地下层样本（0111，floor "-1"）——_under 未接入：有数据、无节点不亮灯（宁缺勿错）
+ *  - 地下层样本（0111 综合楼 B1F / 0113 住院楼 B1F）——三期批A 接入 _under 后正常
+ *    亮灯+楼脚光环（0113 跨日：验证「地下+跨日」也活着）
  *  - 同柜级联样本（0101/0102 同柜名，处理任一条另一条一并置 1）
  *  - 已处理样本（0104/0108）
  * 标记处理直接改本数组；/event/stats、/event/grouped、/event/unhandled 实时重算。
@@ -39,8 +40,9 @@ export const eventRows: EventBrief[] = [
   { eventId: 'BZ-EV-0108', timeStr: ago(300), eventLevel: 1, deviceName: '1#变 P06/T1 配电柜', description: '馈线回路漏电流越限（紧急）', handleStatus: 1, locations: [{ building: 1, floor: '1' }] },
   { eventId: 'BZ-EV-0109', timeStr: agoDays(1, 120), eventLevel: 2, deviceName: '3#变 P06/T3 配电柜', description: '母线绝缘监测越限（昨日遗留未处理）', handleStatus: 0, locations: [{ building: 4, floor: '5' }] },
   { eventId: 'BZ-EV-0110', timeStr: agoDays(2, 200), eventLevel: 1, deviceName: '3#变 P01/T3 进线柜', description: '馈线回路漏电流越限（前日遗留未处理）', handleStatus: 0, locations: [{ building: 3, floor: '12' }] },
-  { eventId: 'BZ-EV-0111', timeStr: ago(15), eventLevel: 2, deviceName: '1#变 P04/T1 配电柜', description: '地下层强电井温度越限（_under 未接入不亮灯样本）', handleStatus: 0, locations: [{ building: 3, floor: '-1' }] },
+  { eventId: 'BZ-EV-0111', timeStr: ago(15), eventLevel: 2, deviceName: '1#变 P04/T1 配电柜', description: '地下层强电井温度越限（综合楼 B1F 样本）', handleStatus: 0, locations: [{ building: 3, floor: '-1' }] },
   { eventId: 'BZ-EV-0112', timeStr: ago(8), eventLevel: 1, deviceName: '2#变 P10/T2 配电柜', description: '进线柜局放异常（多点定位）', handleStatus: 0, locations: [{ building: 5, floor: '2', locationNumber: 'FY-XZ-2F-01' }, { building: 1, floor: '5', locationNumber: 'FY-ZK-5F-03' }] },
+  { eventId: 'BZ-EV-0113', timeStr: agoDays(1, 330), eventLevel: 2, deviceName: '6#变 2P04 配电柜', description: '地下层配电间温度越限（住院楼 B1F 样本）', handleStatus: 0, locations: [{ building: 4, floor: '-1' }] },
 ]
 
 // ---- §3.7/§3.8 楼栋告警统计（3D 楼栋/楼层信息卡；从 eventRows 真实过滤/派生） ----

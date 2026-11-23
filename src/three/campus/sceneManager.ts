@@ -13,7 +13,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
-import { floorKeyOfNode } from './buildings'
+import { floorKeyOfNode, floorNodeName } from './buildings'
 import type { CampusBuildingConfig } from './buildings'
 import type { CampusLayout } from '../../config/campusConfig'
 import { loadBuilding } from './glbLoader'
@@ -157,6 +157,48 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         m.depthWrite = orig.depthWrite
       }
       xrayOrig.clear()
+    }
+  }
+
+  // ---- 地下告警标签徽章（三期批A-2，2026-11-23 迭代：弃光柱/圆环只留徽章）：地下层
+  // 被地面盖住，全景态无法感知地下告警——地下层有未处理 1/2 级告警的楼，楼名标签上
+  // 挂「B1F 告警」呼吸徽章（等级色 pill，样式 theme.css .ubadge 系）。
+  // 只提示「有」不分层（哪层进楼看选择器行染色）；无告警不显示。applyAlarms 末尾重建。
+  /** 地下告警状态（bid → 最高等级 + 负数层名列表；makeLabel 建标签时回填徽章用） */
+  const underAlarmByBid = new Map<number, { level: number; floors: string[] }>()
+  /** 重建标签徽章（applyAlarms 末尾调；楼名标签未就绪时安全空跑） */
+  function rebuildUnderAlarmMarkers() {
+    // 分桶：bid → { 最高等级, 负数层名列表 }
+    underAlarmByBid.clear()
+    for (const [key, level] of alarmFloorLevels) {
+      const sep = key.indexOf('|')
+      const bid = Number(key.slice(0, sep))
+      const fk = Number(key.slice(sep + 1))
+      if (fk >= 0) continue
+      const cur = underAlarmByBid.get(bid)
+      if (cur) {
+        cur.level = Math.min(cur.level, level)
+        cur.floors.push(floorNodeName(fk === 0 ? 'G' : String(fk)) ?? `B${-fk}F`)
+      } else {
+        underAlarmByBid.set(bid, { level, floors: [floorNodeName(fk === 0 ? 'G' : String(fk)) ?? `B${-fk}F`] })
+      }
+    }
+    for (const [bid, info] of underAlarmByBid) {
+      // 标签徽章同步（样式在 theme.css .ubadge 系——平台告警 pill 同款配色语言）
+      const badge = labelEls.get(bid)?.querySelector('.ubadge') as HTMLDivElement | null
+      if (badge) {
+        badge.className = `ubadge lv-${info.level === 1 ? 'urgent' : 'severe'}`
+        badge.style.display = 'inline-flex'
+        const tx = badge.querySelector('.utext')
+        if (tx) tx.textContent = `${info.floors.join('·')} 告警`
+      }
+    }
+    // 已无地下告警的楼：徽章隐藏
+    for (const [id, el] of labelEls) {
+      if (!underAlarmByBid.has(id)) {
+        const badge = el.querySelector('.ubadge') as HTMLDivElement | null
+        if (badge) badge.style.display = 'none'
+      }
     }
   }
 
@@ -314,9 +356,21 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     ].join(';')
     el.innerHTML =
       `<div style="font-size:15px;font-weight:700;color:#2b7ce3;line-height:1.5">${name}</div>` +
-      `<div class="kwh" style="font-size:13px;color:#2b7ce3;line-height:1.4">—</div>`
+      `<div class="kwh" style="font-size:13px;color:#2b7ce3;line-height:1.4">—</div>` +
+      // 地下告警徽章（三期批A-2）：默认隐藏，rebuildUnderAlarmMarkers 按告警数据回填
+      // （样式在 theme.css .ubadge 系——平台告警 pill 同款配色语言）
+      `<div class="ubadge" style="display:none"><i class="udot"></i><span class="utext"></span></div>`
     labelHost.appendChild(el)
     labelEls.set(id, el)
+    // 标签晚于告警数据就位（§3.11 首拉早于加载）：建好即按当前状态回填徽章
+    const u = underAlarmByBid.get(id)
+    if (u) {
+      const badge = el.querySelector('.ubadge') as HTMLDivElement
+      badge.className = `ubadge lv-${u.level === 1 ? 'urgent' : 'severe'}`
+      badge.style.display = 'inline-flex'
+      const tx = badge.querySelector('.utext')
+      if (tx) tx.textContent = `${u.floors.join('·')} 告警`
+    }
   }
 
   const projectTop = (id: number) => {
@@ -953,6 +1007,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     // X 光开启期间告警层换了新克隆材质（地上部分）——重刷透明化跟上（地下层克隆
     // 在 under 组，不受 X 光影响，呼吸保持）
     if (underRevealOn) setUnderReveal(true)
+    // 地下告警标签徽章重建（三期批A-2）
+    rebuildUnderAlarmMarkers()
   }
 
   return {
