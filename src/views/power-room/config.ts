@@ -11,6 +11,8 @@ export const CABINET_MODEL_DIR = 'models/cabinets'
 /**
  * 柜体模型枚举（一级大柜）——新医院柜型不同时在此扩展，并同步 scripts/check-power-rooms.mjs 的 MODELS。
  * 业务口径（2026-10-29 用户确认）：进线柜、馈线柜、联络柜是三种类型，共用 jinxian 一个模型。
+ * 注（2026-11-23）：建模方交付时 jinxian.glb 与 dianrongui.glb 两个文件内容装反，已对调
+ * 文件名，本枚举与各处映射的语义不变；重新索取模型文件时注意别再按错名覆盖。
  * 注：kaiguan.glb 不进本枚举——它是挂在大柜下的「二级开关单元」模型（engine/scene.ts 内处理）。
  * 高压柜专用模型建模中：建模完成后在转换脚本加映射行、枚举加新模型名；此前转换遇高压柜警告跳过。
  */
