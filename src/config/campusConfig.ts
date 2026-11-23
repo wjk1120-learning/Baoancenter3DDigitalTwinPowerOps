@@ -61,8 +61,9 @@ const RAW_DIAG: Record<number, number> = {
 }
 
 /** 六栋楼（文件名/楼名与 mock §1.2 对齐）。
- *  住院/综合建模拆为地上(_on)+地下(_under)——2026-11-17 用户拍板：地下先不做，
- *  files 只引地上版；以后做地下把对应 _under 加进数组即可（加载器自动合并归一）。 */
+ *  住院/综合建模拆为地上(_on)+地下(_under)——三期批A（2026-11-23 拍板）接入地下：
+ *  files[0]=地上主文件定归一基准（全景视觉不变），_under 沉入 y<0 选层透视才见；
+ *  综合楼 under 混入「采光顶」悬空孤岛（比 B3F 还低 14m），excludeNodes 剔除。 */
 export const CAMPUS_BUILDINGS: CampusBuildingConfig[] = [
   {
     id: 1,
@@ -86,16 +87,17 @@ export const CAMPUS_BUILDINGS: CampusBuildingConfig[] = [
   {
     id: 3,
     name: '综合楼',
-    files: ['zonhe_on'],
+    files: ['zonhe_on', 'zonhe_under'],
     pos: POS[3]!,
     targetFoot: FOOT[3]!,
     yaw: YAW[3] ?? 0,
     foot: REAL_FOOT[3],
+    excludeNodes: ['采光顶'], // under 混入的「采光顶｜放射肋」悬空孤岛（B3F 底还低 14m）
   },
   {
     id: 4,
     name: '住院楼',
-    files: ['zhuyuan_on'],
+    files: ['zhuyuan_on', 'zhuyuan_under'],
     pos: POS[4]!,
     targetFoot: FOOT[4]!,
     yaw: YAW[4] ?? 0,

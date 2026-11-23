@@ -121,6 +121,45 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   buildHospitalCourtyardGround(groundGroup, false, buildings, layout)
   scene.add(groundGroup)
 
+  // ---- 地下层选层 X 光（三期批A）：地下层平时被地面盖住；楼层选择器选 -1/-2/-3
+  // 时地面整组隐藏 + 地上主文件变极淡骨架（opacity 0.08）——地下层在空旷场景里
+  // 保持实体清晰展示（用户 2026-11-23 拍板「X 光透视」，弃「地面半透」——半透时
+  // 连桥/天桥与地下层混作一团不直观）。退出选层全部恢复。
+  let underRevealOn = false
+  /** X 光原值表（按材质记录——GLB 共享材质坑同 hover/dim：重复记录会存到改后值） */
+  const xrayOrig = new Map<THREE.Material, { opacity: number; transparent: boolean; depthWrite: boolean }>()
+  function setUnderReveal(on: boolean) {
+    if (on === underRevealOn) return
+    underRevealOn = on
+    groundGroup.visible = !on
+    for (const [, main] of buildingMains) {
+      if (!main) continue
+      main.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh) return
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        for (const m of mats) {
+          if (on) {
+            if (!xrayOrig.has(m)) {
+              xrayOrig.set(m, { opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite })
+            }
+            m.transparent = true
+            m.opacity = 0.08
+            m.depthWrite = false
+          }
+        }
+      })
+    }
+    if (!on) {
+      for (const [m, orig] of xrayOrig) {
+        m.opacity = orig.opacity
+        m.transparent = orig.transparent
+        m.depthWrite = orig.depthWrite
+      }
+      xrayOrig.clear()
+    }
+  }
+
   // ---- 初始机位：按配置预计算的园区包围盒取景（楼栋到货后不重摆相机，构图稳定） ----
   // 取景距离只按核心楼群（与路网 yard 同口径）——行政楼等独立地块参与推距会把相机推到
   // 数百米外的超远景（用户观感"楼都被压缩了"的真根因）；但目标中心按全部楼栋并对齐，
@@ -313,6 +352,8 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
   const buildingRoots = new Map<number, THREE.Group>()
   const buildingBoxes = new Map<number, THREE.Box3>()
   const buildingFloors = new Map<number, Map<string, THREE.Object3D>>()
+  /** 地上层主文件根：buildingId → Object3D（X 光透视时整体透明化的对象，三期批A） */
+  const buildingMains = new Map<number, THREE.Object3D>()
   /** 楼层静态世界盒：buildingId → floorKey → Box3（加载摆位后算定，与楼名标签/
    *  聚焦取景同源；引线卡锚点用） */
   const floorWorldBoxes = new Map<number, Map<string, THREE.Box3>>()
@@ -345,6 +386,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
         buildingBoxes.set(cfg.id, b.box)
         buildingFloors.set(cfg.id, b.floors)
         floorWorldBoxes.set(cfg.id, b.floorBoxes)
+        if (b.mainObject) buildingMains.set(cfg.id, b.mainObject)
         grown.push(b.object)
       }
       done++
@@ -561,6 +603,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     if (!root || !box) return
     clearFloorFocusVisual()
     focusedFloor = null
+    setUnderReveal(false) // 地下透视兜底关（楼层态直接点另一栋楼，三期批A）
     focusedId = id
     setHover(null)
     for (const [bid, r] of buildingRoots) r.visible = bid === id
@@ -577,6 +620,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     clearFloorFocusVisual()
     focusedFloor = null
     focusedId = null
+    setUnderReveal(false) // 从地下层退出：恢复地面与地上楼体（三期批A）
     for (const r of buildingRoots.values()) r.visible = true
     const { pos, tg } = computeFit(campusBounds, framedBounds, CAMPUS_FORWARD)
     flyTo(pos, tg)
@@ -697,6 +741,15 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     const cfg = buildings.find((b) => b.id === buildingId)
     const dir = cfg?.focusDir ? new THREE.Vector3(...cfg.focusDir).normalize() : CAMPUS_FORWARD
     const { pos, tg } = computeFit(box, box, dir)
+    // 地下层（三期批A）：全园区地面渐变半透露出地下层；视线焦点抬回地面高度、
+    // 相机保持在地上高度俯视穿透明地面看。选回地上层时恢复地面不透明
+    if (Number(floorKey) < 0) {
+      setUnderReveal(true)
+      tg.y = 0
+      pos.y = Math.max(pos.y, 6)
+    } else {
+      setUnderReveal(false)
+    }
     flyTo(pos, tg)
   }
 
@@ -706,6 +759,7 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     if (focusedFloor == null || focusedId == null) return
     clearFloorFocusVisual()
     focusedFloor = null
+    setUnderReveal(false) // 从地下层退出：恢复地面与地上楼体（三期批A）
     const box = buildingBoxes.get(focusedId)
     if (!box) return
     const cfg = buildings.find((b) => b.id === focusedId)
@@ -896,6 +950,9 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       })
       alarmFloorLevels.set(key, a.level)
     }
+    // X 光开启期间告警层换了新克隆材质（地上部分）——重刷透明化跟上（地下层克隆
+    // 在 under 组，不受 X 光影响，呼吸保持）
+    if (underRevealOn) setUnderReveal(true)
   }
 
   return {
