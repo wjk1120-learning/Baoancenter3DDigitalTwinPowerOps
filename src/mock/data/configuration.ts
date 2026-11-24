@@ -981,3 +981,238 @@ export function deleteHealthTemplateRow(id: number): boolean | ReturnType<typeof
   healthTemplateRows.splice(healthTemplateRows.indexOf(hit), 1)
   return true
 }
+
+/* ================= §5.25-5.28 楼栋能耗统计写链路（随 5.26/5.27 契约变更提前实现，2026-11-24） =================
+ * 契约变更：§5.26/§5.27 body 的 buildingId 变必填（缺省 code=0「楼栋ID不能为空」）；
+ * 设备唯一性从「全院一设备一行」改为「一楼栋一设备一行」，重复文案「该设备在该楼栋已存在」。 */
+import { isMockFail } from '../mockFail'
+
+const sentinelBuildingName = '全院'
+
+function parseRequiredBuildingId(body: Record<string, unknown>): number | ReturnType<typeof mockFail> {
+  const raw = body.buildingId
+  if (raw === undefined || raw === null || raw === '') return mockFail('楼栋ID不能为空')
+  const buildingId = Number(raw)
+  if (!Number.isSafeInteger(buildingId) || buildingId < 0) return mockFail(`楼栋ID不合法：${String(raw)}`)
+  return buildingId
+}
+
+function resolveStatsDevice(body: Record<string, unknown>, buildingId: number, buildingName: string): BuildingStatsDevice | ReturnType<typeof mockFail> {
+  const deviceId = Number(body.deviceId)
+  // 文案口径（2026-11-24 用户拍板）：不存在设备id为{用户输入}的设备
+  if (!Number.isSafeInteger(deviceId) || deviceId <= 0) return mockFail(`不存在设备id为${String(body.deviceId ?? '')}的设备`)
+  const device = deviceRows.find((d) => d.deviceId === deviceId)
+  if (!device) return mockFail(`不存在设备id为${deviceId}的设备`)
+  // 返回完整行形状（coefficient/buildingId 由调用方覆盖），避免部分形状混入成功响应
+  return { buildingId, buildingName, deviceId, channelId: device.channelId, coefficient: 1 }
+}
+
+function parseCoefficient(body: Record<string, unknown>): 1 | -1 | ReturnType<typeof mockFail> {
+  const coefficient = Number(body.coefficient)
+  if (coefficient !== 1 && coefficient !== -1) return mockFail('统计方式非法（仅累加 1 / 扣减 -1）')
+  return coefficient
+}
+
+/** §5.25 新增楼栋统计映射（通道自动填充；同楼栋内设备唯一） */
+export function addBuildingStatsRow(body: Record<string, unknown>): BuildingStatsDevice | ReturnType<typeof mockFail> {
+  const buildingId = Number(body.buildingId)
+  if (!Number.isSafeInteger(buildingId) || buildingId <= 0) return mockFail(`楼栋不存在${body.buildingId ?? ''}`)
+  const building = buildingRows.find((b) => b.id === buildingId)
+  if (!building) return mockFail(`楼栋不存在${buildingId}`)
+  const row = resolveStatsDevice(body, buildingId, building.buildingName)
+  if (isMockFail(row)) return row
+  const coefficient = parseCoefficient(body)
+  if (isMockFail(coefficient)) return coefficient
+  if (buildingStatsRows.some((r) => r.buildingId === buildingId && r.deviceId === row.deviceId)) {
+    return mockFail('该设备在该楼栋已存在')
+  }
+  row.coefficient = coefficient
+  buildingStatsRows.push(row)
+  return clone(row)
+}
+
+/** §5.28 新增全院哨兵行（buildingId=0 固定；哨兵行内设备唯一） */
+export function addSentinelStatsRow(body: Record<string, unknown>): BuildingStatsDevice | ReturnType<typeof mockFail> {
+  const row = resolveStatsDevice(body, 0, sentinelBuildingName)
+  if (isMockFail(row)) return row
+  const coefficient = parseCoefficient(body)
+  if (isMockFail(coefficient)) return coefficient
+  if (buildingStatsRows.some((r) => r.buildingId === 0 && r.deviceId === row.deviceId)) {
+    return mockFail('该设备在全院统计已存在')
+  }
+  row.coefficient = coefficient
+  buildingStatsRows.push(row)
+  return clone(row)
+}
+
+/** §5.26 修改统计方式（body buildingId 必填；按 楼栋+设备 定位映射行，仅 coefficient 可改） */
+export function updateBuildingStatsRow(deviceId: number, body: Record<string, unknown>): BuildingStatsDevice | ReturnType<typeof mockFail> {
+  const buildingId = parseRequiredBuildingId(body)
+  if (isMockFail(buildingId)) return buildingId
+  const coefficient = parseCoefficient(body)
+  if (isMockFail(coefficient)) return coefficient
+  const hit = buildingStatsRows.find((r) => r.deviceId === deviceId && r.buildingId === buildingId)
+  if (!hit) return mockFail('该设备在该楼栋不存在统计映射')
+  hit.coefficient = coefficient
+  return clone(hit)
+}
+
+/** §5.27 删除映射（body buildingId 必填；按 楼栋+设备 定位） */
+export function deleteBuildingStatsRow(deviceId: number, body: Record<string, unknown>): boolean | ReturnType<typeof mockFail> {
+  const buildingId = parseRequiredBuildingId(body)
+  if (isMockFail(buildingId)) return buildingId
+  const idx = buildingStatsRows.findIndex((r) => r.deviceId === deviceId && r.buildingId === buildingId)
+  if (idx === -1) return mockFail('该设备在该楼栋不存在统计映射')
+  buildingStatsRows.splice(idx, 1)
+  return true
+}
+
+/* ================= §5.29-5.32 楼层统计写链路（批次 4） =================
+ * (楼栋,楼层) 唯一；§5.31 devices 空数组=清空；§5.32 两步删除——须先 §5.31 清空才允许删。
+ * 楼层口径 G/数字/负数；楼栋须为维度表真实楼栋（不支持 0 全院）。 */
+
+function normalizeFloor(floorRaw: unknown): string {
+  return String(floorRaw ?? '').trim().toUpperCase()
+}
+
+function isLegalFloor(floor: string): boolean {
+  return /^(G|-?\d+)$/.test(floor)
+}
+
+function findFloorGroup(buildingId: number, floor: string): FloorStatsGroup | null {
+  return floorStatsRows.find((r) => r.buildingId === buildingId && r.floor === floor) ?? null
+}
+
+function parseFloorDevices(raw: unknown): FloorStatsGroup['devices'] | ReturnType<typeof mockFail> {
+  if (!Array.isArray(raw)) return mockFail('测点组数据必须是数组')
+  const devices: FloorStatsGroup['devices'] = []
+  const seen = new Set<number>()
+  for (const item of raw as Record<string, unknown>[]) {
+    const deviceId = Number(item.deviceId)
+    const coefficient = Number(item.coefficient)
+    if (!Number.isSafeInteger(deviceId) || deviceId <= 0) return mockFail('测点 ID 必须为正整数')
+    if (seen.has(deviceId)) return mockFail(`测点 ${deviceId} 在同一组内重复`)
+    if (coefficient !== 1 && coefficient !== -1) return mockFail(`测点 ${deviceId} 的统计方式非法`)
+    seen.add(deviceId)
+    devices.push({ deviceId, coefficient: coefficient as 1 | -1 })
+  }
+  return devices
+}
+
+/** §5.30 新增测点组（(楼栋,楼层) 唯一；至少 1 个测点） */
+export function addFloorStatsRow(body: Record<string, unknown>): FloorStatsGroup | ReturnType<typeof mockFail> {
+  const buildingId = Number(body.buildingId)
+  if (!Number.isSafeInteger(buildingId) || buildingId <= 0) return mockFail(`楼栋不存在${body.buildingId ?? ''}`)
+  const building = buildingRows.find((b) => b.id === buildingId)
+  if (!building) return mockFail(`楼栋不存在${buildingId}`)
+  const floor = normalizeFloor(body.floor)
+  if (!isLegalFloor(floor)) return mockFail(`楼层格式不合法：${String(body.floor ?? '')}（应为 G、数字或负数）`)
+  if (findFloorGroup(buildingId, floor)) return mockFail(`${building.buildingName} ${floor} 层已存在测点组`)
+  const devices = parseFloorDevices(body.devices)
+  if (isMockFail(devices)) return devices
+  if (!devices.length) return mockFail('测点组至少需要 1 个测点')
+  const row: FloorStatsGroup = { buildingId, buildingName: building.buildingName, floor, devices }
+  floorStatsRows.push(row)
+  return clone(row)
+}
+
+/** §5.31 修改测点组（devices 全量差量）。
+ * 宝安口径（2026-11-24 用户拍板）：数据库不允许空测点组存在，空数组=清空即整组删除
+ * （返回被删组形状 devices=[]）；§5.32 由此成为摆设，前端不再调用，仅保留契约对齐。 */
+export function updateFloorStatsRow(buildingId: number, floorRaw: unknown, body: Record<string, unknown>): FloorStatsGroup | ReturnType<typeof mockFail> {
+  const floor = normalizeFloor(floorRaw)
+  const hit = findFloorGroup(buildingId, floor)
+  if (!hit) return mockFail(`${buildingId} ${floor} 层不存在测点组`)
+  const devices = parseFloorDevices(body.devices)
+  if (isMockFail(devices)) return devices
+  if (!devices.length) {
+    // 清空即整组删除（数据库不允许空测点组）
+    floorStatsRows.splice(floorStatsRows.indexOf(hit), 1)
+    return clone({ ...hit, devices: [] })
+  }
+  hit.devices = devices
+  return clone(hit)
+}
+
+/** §5.32 删除测点组——前端已改为一步清空删除（见 §5.31 空数组口径），本接口仅保留
+ * 契约对齐、不再被前端调用；语义维持两步协议：组内仍有测点 → code=0。 */
+export function deleteFloorStatsRow(buildingId: number, floorRaw: unknown): boolean | ReturnType<typeof mockFail> {
+  const floor = normalizeFloor(floorRaw)
+  const hit = findFloorGroup(buildingId, floor)
+  if (!hit) return mockFail(`${buildingId} ${floor} 层不存在测点组`)
+  if (hit.devices.length) return mockFail('测点组尚未清空，请先执行清空操作')
+  floorStatsRows.splice(floorStatsRows.indexOf(hit), 1)
+  return true
+}
+
+/* ================= §5.34-5.36 数据类型写链路（批次 4） =================
+ * typeCode/dataId 唯一；§5.35 端点为 POST /data-types/{id}（非 /rename），字段缺省=保留、
+ * remark 空串=清除；§5.36 删除成功返回 data:null（复刻 BUG-013，api 层 deleteConfig 已放行）。 */
+
+/** §5.34 新增数据类型 */
+export function addDataTypeRow(body: Record<string, unknown>): CetDataType | ReturnType<typeof mockFail> {
+  try {
+    const typeCode = str2(body.typeCode)
+    const typeName = str2(body.typeName)
+    const dataId = Number(body.dataId)
+    const remark = str2(body.remark)
+    throwIf(!typeCode, '类型编码不能为空')
+    throwIf(typeCode.length > 32, '类型编码不能超过 32 字符')
+    throwIf(CET_DATA_TYPES.some((t) => t.typeCode === typeCode), `类型编码已存在：${typeCode}`)
+    throwIf(!typeName, '类型名称不能为空')
+    throwIf(typeName.length > 64, '类型名称不能超过 64 字符')
+    throwIf(!Number.isSafeInteger(dataId) || dataId < 1, 'DataID 必须为正整数')
+    throwIf(CET_DATA_TYPES.some((t) => t.dataId === dataId), `DataID 已存在：${dataId}`)
+    throwIf(remark.length > 255, '备注不能超过 255 字符')
+    const row: CetDataType = {
+      id: CET_DATA_TYPES.reduce((max, t) => Math.max(max, t.id), 0) + 1,
+      typeCode,
+      typeName,
+      dataId,
+      remark: remark || null,
+    }
+    CET_DATA_TYPES.push(row)
+    return clone(row)
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '数据类型创建失败')
+  }
+}
+
+/** §5.35 修改数据类型（字段缺省=保留原值；remark 空串=清除；唯一性排除自身） */
+export function updateDataTypeRow(id: number, body: Record<string, unknown>): CetDataType | ReturnType<typeof mockFail> {
+  try {
+    const hit = CET_DATA_TYPES.find((t) => t.id === id)
+    if (!hit) return mockFail(`数据类型不存在${id}`)
+    if (body.typeCode !== undefined) {
+      const typeCode = str2(body.typeCode)
+      throwIf(!typeCode, '类型编码不能为空')
+      throwIf(typeCode.length > 32, '类型编码不能超过 32 字符')
+      throwIf(CET_DATA_TYPES.some((t) => t.id !== id && t.typeCode === typeCode), `类型编码已存在：${typeCode}`)
+      hit.typeCode = typeCode
+    }
+    if (body.typeName !== undefined) {
+      const typeName = str2(body.typeName)
+      throwIf(!typeName, '类型名称不能为空')
+      throwIf(typeName.length > 64, '类型名称不能超过 64 字符')
+      hit.typeName = typeName
+    }
+    if (body.dataId !== undefined) {
+      const dataId = Number(body.dataId)
+      throwIf(!Number.isSafeInteger(dataId) || dataId < 1, 'DataID 必须为正整数')
+      throwIf(CET_DATA_TYPES.some((t) => t.id !== id && t.dataId === dataId), `DataID 已存在：${dataId}`)
+      hit.dataId = dataId
+    }
+    if (body.remark !== undefined) hit.remark = str2(body.remark) || null
+    return clone(hit)
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '数据类型保存失败')
+  }
+}
+
+/** §5.36 删除数据类型（无引用校验；成功返回 null 复刻 BUG-013） */
+export function deleteDataTypeRow(id: number): null | ReturnType<typeof mockFail> {
+  const hit = CET_DATA_TYPES.find((t) => t.id === id)
+  if (!hit) return mockFail(`数据类型不存在${id}`)
+  CET_DATA_TYPES.splice(CET_DATA_TYPES.indexOf(hit), 1)
+  return null
+}

@@ -18,3 +18,8 @@ export function mockFail(msg: string): MockFail {
 export function isMockFail(v: unknown): v is MockFail {
   return !!v && typeof v === 'object' && MOCK_FAIL in v
 }
+
+/** 类型收窄：handler 返回「数据 | mockFail」联合时，先走本守卫分流出失败分支 */
+export function mockFailGuard<T>(v: T | MockFail): v is T {
+  return !isMockFail(v)
+}

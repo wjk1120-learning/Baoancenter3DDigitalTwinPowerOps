@@ -37,11 +37,16 @@ export const addBuildingStats = (device: StatsDevice, buildingId: number) =>
     ? configPost<BuildingStatsDevice>(`${buildingStats}/sentinel-devices`, device)
     : configPost<BuildingStatsDevice>(`${buildingStats}/devices`, { ...device, buildingId })
 
-export const updateBuildingStats = (device: StatsDevice) =>
-  configPost<BuildingStatsDevice>(`${buildingStats}/devices/${device.deviceId}/update`, { coefficient: device.coefficient })
+/** §5.26 修改统计方式（契约 2026-11-24 变更：body buildingId 必填，缺省后端 code=0「楼栋ID不能为空」） */
+export const updateBuildingStats = (device: StatsDevice, buildingId: number) =>
+  configPost<BuildingStatsDevice>(`${buildingStats}/devices/${device.deviceId}/update`, {
+    buildingId,
+    coefficient: device.coefficient,
+  })
 
-export const deleteBuildingStats = (deviceId: number) =>
-  deleteConfig(`${buildingStats}/devices/${deviceId}/delete`)
+/** §5.27 删除映射（契约 2026-11-24 变更：body buildingId 必填） */
+export const deleteBuildingStats = (deviceId: number, buildingId: number) =>
+  deleteConfig(`${buildingStats}/devices/${deviceId}/delete`, { buildingId })
 
 export const getFloorStats = (buildingId?: number) =>
   configGet<FloorStatsGroup[]>(floorStats, { buildingId })

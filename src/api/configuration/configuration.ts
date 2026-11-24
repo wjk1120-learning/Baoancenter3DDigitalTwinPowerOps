@@ -80,10 +80,11 @@ export function deleteDataType(id: number): Promise<void> {
   return deleteConfig(`/data-types/${id}/delete`)
 }
 
-export async function deleteConfig(path: string) {
+/** 通用删除：building-stats 等接口契约要求 body 携带定位字段（如 buildingId），可选传入 */
+export async function deleteConfig(path: string, body?: unknown) {
   // BUG-013：§5.36 数据类型删除成功实际返回 data:null（契约标 Boolean），记录确已删除；
   // 其余删除仍要求后端显式确认 true。
-  const result = await configPost<boolean | null>(path)
+  const result = await configPost<boolean | null>(path, body)
   if (result !== true && !(path.startsWith('/data-types/') && result === null)) {
     throw new Error('后端未确认删除成功')
   }

@@ -38,7 +38,8 @@ function open(next: NonNullable<typeof mode.value>, row?: BuildingStatsDevice) {
 async function save() {
   const row = selected.value
   if (mode.value === 'delete' && row) {
-    if (await submit(() => deleteBuildingStats(row.deviceId))) mode.value = null
+    // 契约 2026-11-24 变更：body buildingId 必填（此前靠设备单行定位可省略）
+    if (await submit(() => deleteBuildingStats(row.deviceId, row.buildingId))) mode.value = null
     return
   }
   const id = deviceId.value
@@ -53,7 +54,7 @@ async function save() {
   }
   if (await submit(async () => {
     const device = { deviceId: id, coefficient: coefficient.value }
-    const result = row ? await updateBuildingStats(device) : await addBuildingStats(device, building)
+    const result = row ? await updateBuildingStats(device, building) : await addBuildingStats(device, building)
     selected.value = result
     buildingId.value = result.buildingId
     deviceId.value = result.deviceId

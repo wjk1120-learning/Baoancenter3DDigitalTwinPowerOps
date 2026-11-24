@@ -54,6 +54,16 @@ import {
   updateHealthTemplateRow,
   saveHealthTemplateTreeRow,
   deleteHealthTemplateRow,
+  addBuildingStatsRow,
+  addSentinelStatsRow,
+  updateBuildingStatsRow,
+  deleteBuildingStatsRow,
+  addFloorStatsRow,
+  updateFloorStatsRow,
+  deleteFloorStatsRow,
+  addDataTypeRow,
+  updateDataTypeRow,
+  deleteDataTypeRow,
 } from './data/configuration'
 import { addCameraRow, deleteCameraRow, updateCameraRow } from './data/ezviz'
 import type { DeviceFilter } from '../api/configuration/inventory'
@@ -351,12 +361,40 @@ const routes: MockRoute[] = [
   route('POST /configuration/cabinets/:id/delete', ({ params }) =>
     deleteCabinet(Number(params.id)),
   ),
-  // §5.24/§5.29 楼栋/楼层能耗统计（只读，写随批次 4；buildingId 空串=全量）
+  // §5.24 楼栋统计列表 / §5.29 楼层统计列表（楼层统计写随批次 4；buildingId 空串=全量）
   route('GET /configuration/building-stats', ({ query }) =>
     getBuildingStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
   ),
   route('GET /configuration/building-floor-stats', ({ query }) =>
     getConfigFloorStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
+  ),
+  // §5.25/§5.28 新增楼栋/全院统计（契约 2026-11-24 变更：唯一性按楼栋维度，重复文案「该设备在该楼栋已存在」）
+  route('POST /configuration/building-stats/devices', ({ body }) => addBuildingStatsRow(asBody(body))),
+  route('POST /configuration/building-stats/sentinel-devices', ({ body }) =>
+    addSentinelStatsRow(asBody(body)),
+  ),
+  // §5.26/§5.27 修改/删除（契约 2026-11-24 变更：body buildingId 必填，缺省 code=0「楼栋ID不能为空」）
+  route('POST /configuration/building-stats/devices/:deviceId/update', ({ params, body }) =>
+    updateBuildingStatsRow(Number(params.deviceId), asBody(body)),
+  ),
+  route('POST /configuration/building-stats/devices/:deviceId/delete', ({ params, body }) =>
+    deleteBuildingStatsRow(Number(params.deviceId), asBody(body)),
+  ),
+  // §5.30/5.31/5.32 楼层测点组（批次 4；两步删除：先 5.31 空数组清空，后 5.32 删除）
+  route('POST /configuration/building-floor-stats', ({ body }) => addFloorStatsRow(asBody(body))),
+  route('POST /configuration/building-floor-stats/:buildingId/:floor/update', ({ params, body }) =>
+    updateFloorStatsRow(Number(params.buildingId), params.floor, asBody(body)),
+  ),
+  route('POST /configuration/building-floor-stats/:buildingId/:floor/delete', ({ params }) =>
+    deleteFloorStatsRow(Number(params.buildingId), params.floor),
+  ),
+  // §5.34/5.35/5.36 数据类型（批次 4；5.35 端点为 POST /data-types/{id} 非 /rename；5.36 删除返回 data:null 复刻 BUG-013）
+  route('POST /configuration/data-types', ({ body }) => addDataTypeRow(asBody(body))),
+  route('POST /configuration/data-types/:id', ({ params, body }) =>
+    updateDataTypeRow(Number(params.id), asBody(body)),
+  ),
+  route('POST /configuration/data-types/:id/delete', ({ params }) =>
+    deleteDataTypeRow(Number(params.id)),
   ),
   // §7.6.1/§7.6.2 健康度模板列表与整树
   route('GET /health/templates', () => getHealthTemplateList()),
