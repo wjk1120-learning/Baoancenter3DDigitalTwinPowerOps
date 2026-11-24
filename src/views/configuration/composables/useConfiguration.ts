@@ -59,7 +59,12 @@ export function useConfigMutation(afterSave: () => void | Promise<void>) {
   const warnings = ref<string[]>([])
   const writable = computed(() => canWriteConfiguration())
 
-  async function submit(action: () => Promise<unknown>, reload = true) {
+  async function submit(
+    action: () => Promise<unknown>,
+    reload = true,
+    /** 成功提示文案（宝安定制）：缺省「操作成功」；面板可传更具体的引导文案避免双重提示 */
+    successMessage?: string,
+  ) {
     /* action 的返回值不参与成败判定（抛错=失败），故接受任意 Promise */
     if (!canWriteConfiguration() || saving.value) return false
     saving.value = true
@@ -69,7 +74,7 @@ export function useConfigMutation(afterSave: () => void | Promise<void>) {
       // 宝安定制（2026-11-24 用户拍板，偏离福永原版）：成功统一给轻提示——
       // 福永成功仅关弹窗+列表刷新，无反馈。放在 mutation 层，批次 2-4 照搬的
       // 面板走同一入口自动获得；失败仍走弹窗内红条（不在全局重复报）。
-      globalMessage()?.success('操作成功')
+      globalMessage()?.success(successMessage ?? '操作成功')
       if (reload) await afterSave()
       return true
     } catch (e) {

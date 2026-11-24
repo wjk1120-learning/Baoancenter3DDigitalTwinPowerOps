@@ -816,3 +816,168 @@ function seedAssessment(id: number, cabinetId: number, grades: Record<string, st
 seedAssessment(1, 2, { dim1_rust: '正常', dim1_label: '正常', dim2_temp: '异常', dim2_noise: '正常' }, '季度评估', '2026-11-20 10:15:00')
 // 箱柜 6（2#变 2AA2馈线柜）：锈蚀严重档 → HI 62.3
 seedAssessment(2, 6, { dim1_rust: '严重', dim1_label: '异常', dim2_temp: '异常', dim2_noise: '注意' }, null, '2026-11-22 16:40:00')
+
+/* ================= §7.6.3-7.6.6 健康度模板 CRUD（批次 3） =================
+ * 编码与设备类型名称库内唯一；整树保存按五规则强校验（失败 code=0 带实际值定位，
+ * 任一不满足整体拒收）；自动项四档文案可留空（与客户端预检豁免口径一致）。
+ * 约定同评估链路：内部抛 Error(用户文案)，导出函数 catch 转 mockFail 返回。 */
+
+function str2(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function throwIf(bool: boolean, message: string) {
+  if (bool) throw new Error(message)
+}
+
+/** §7.6.5 整树强校验（规则与文案对齐契约表 + 带实际值定位）；校验过的维度原样返回（落库前再补 id） */
+function validateTreeDimensions(raw: unknown): HealthTemplateTree['dimensions'] {
+  if (!Array.isArray(raw)) throw new Error('模板配置数据异常：维度数据必须是数组')
+  if (!raw.length) throw new Error('模板配置数据异常：至少需要配置 1 个维度')
+  const dims: HealthTemplateTree['dimensions'] = []
+  const seenNo = new Set<number>()
+  const seenCode = new Set<string>()
+  let autoCount = 0
+  let weightSum = 0
+  for (const rawDim of raw) {
+    const d = (rawDim ?? {}) as Record<string, unknown>
+    const no = Number(d.no)
+    const name = str2(d.name)
+    const weightPercent = Number(d.weightPercent)
+    const dimName = name || `维度${no}`
+    throwIf(!Number.isSafeInteger(no) || no < 1, `维度序号必须为正整数：${d.no ?? '缺省'}`)
+    throwIf(seenNo.has(no), `维度序号重复：${no}`)
+    seenNo.add(no)
+    throwIf(!name, `维度「${dimName}」的名称不能为空`)
+    throwIf(name.length > 64, `维度「${dimName}」的名称不能超过 64 字符`)
+    throwIf(!Number.isFinite(weightPercent) || weightPercent < 0, `维度「${dimName}」的权重必须为非负数字`)
+    if (!Array.isArray(d.items) || !d.items.length) throw new Error(`维度「${dimName}」至少需要配置 1 个评分项`)
+    const items: HealthTemplateTree['dimensions'][number]['items'] = []
+    let subSum = 0
+    for (const rawItem of d.items as Record<string, unknown>[]) {
+      const i = (rawItem ?? {}) as Record<string, unknown>
+      const code = str2(i.code)
+      const itemName = str2(i.name)
+      const subWeight = Number(i.subWeight)
+      const auto = i.autoCalculated === true
+      throwIf(!code, `维度「${dimName}」存在未填写编码的评分项`)
+      throwIf(code.length > 32, `评分项编码「${code}」不能超过 32 字符`)
+      throwIf(seenCode.has(code), `评分项编码重复：${code}`)
+      seenCode.add(code)
+      throwIf(!itemName, `维度「${dimName}」评分项「${itemName || code}」的名称不能为空`)
+      throwIf(itemName.length > 64, `评分项「${itemName}」的名称不能超过 64 字符`)
+      throwIf(!Number.isFinite(subWeight) || subWeight <= 0, `维度「${dimName}」评分项「${itemName}」的子权重必须大于 0`)
+      if (auto) {
+        autoCount += 1
+        throwIf(autoCount > 1, '自动评分项每模板至多 1 个')
+        throwIf(code !== AUTO_ITEM_CODE, `自动评分项编码固定为 ${AUTO_ITEM_CODE}`)
+      } else {
+        // 四档判定文案：手工项必填（≤255）；自动项豁免可留空
+        for (const [label, key] of [['正常', 'normal'], ['注意', 'attention'], ['异常', 'abnormal'], ['严重', 'severe']] as const) {
+          const text = typeof i[key] === 'string' ? (i[key] as string).trim() : ''
+          throwIf(!text, `维度「${dimName}」评分项「${itemName}」的「${label}」判定文案不能为空`)
+          throwIf(text.length > 255, `评分项「${itemName}」的「${label}」判定文案不能超过 255 字符`)
+        }
+      }
+      subSum += subWeight
+      items.push({
+        code,
+        name: itemName,
+        subWeight,
+        normal: str2(i.normal),
+        attention: str2(i.attention),
+        abnormal: str2(i.abnormal),
+        severe: str2(i.severe),
+        autoCalculated: auto,
+      })
+    }
+    throwIf(Math.abs(subSum - 1) > 1e-6, `维度「${dimName}」的评分项权重之和必须等于 1，实际为 ${Number(subSum.toFixed(4))}，不允许保存`)
+    weightSum += weightPercent
+    dims.push({ no, name, weightPercent, items })
+  }
+  throwIf(Math.abs(weightSum - 100) > 1e-6, `维度权重之和必须等于 100，实际为 ${Number(weightSum.toFixed(2))}，不允许保存`)
+  return dims
+}
+
+/** §7.6.3 新增模板壳（编码/设备类型名称库内唯一）；返回整树（空壳 dimensions=[]，汇总由前端推导） */
+export function addHealthTemplateRow(body: Record<string, unknown>): HealthTemplateTree | ReturnType<typeof mockFail> {
+  try {
+    const code = str2(body.code)
+    const typeName = str2(body.typeName)
+    const life = Number(body.designLifeYears)
+    throwIf(!code, '请输入模板编码')
+    throwIf(!typeName, '请输入匹配的设备类型名称')
+    throwIf(!Number.isSafeInteger(life) || life < 1, '设计寿命必须为 ≥1 的整数（年）')
+    throwIf(healthTemplateRows.some((t) => t.code === code), `模板编码已存在：${code}`)
+    throwIf(healthTemplateRows.some((t) => t.typeName === typeName), `设备类型「${typeName}」已配置模板`)
+    const row: HealthTemplateTree = {
+      id: healthTemplateRows.reduce((max, t) => Math.max(max, t.id), 0) + 1,
+      code,
+      typeName,
+      designLifeYears: life,
+      createdAt: formatNow(),
+      dimensionCount: 0,
+      itemCount: 0,
+      weightSum: 0,
+      dimensions: [],
+    }
+    healthTemplateRows.push(row)
+    return clone(row)
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '模板创建失败')
+  }
+}
+
+/** §7.6.4 修改壳（唯一性排除自身），返回整树 */
+export function updateHealthTemplateRow(id: number, body: Record<string, unknown>): HealthTemplateTree | ReturnType<typeof mockFail> {
+  try {
+    const hit = healthTemplateRows.find((t) => t.id === id)
+    if (!hit) return mockFail(`模板不存在${id}`)
+    const code = str2(body.code)
+    const typeName = str2(body.typeName)
+    const life = Number(body.designLifeYears)
+    throwIf(!code, '请输入模板编码')
+    throwIf(!typeName, '请输入匹配的设备类型名称')
+    throwIf(!Number.isSafeInteger(life) || life < 1, '设计寿命必须为 ≥1 的整数（年）')
+    throwIf(healthTemplateRows.some((t) => t.id !== id && t.code === code), `模板编码已存在：${code}`)
+    throwIf(healthTemplateRows.some((t) => t.id !== id && t.typeName === typeName), `设备类型「${typeName}」已配置模板`)
+    hit.code = code
+    hit.typeName = typeName
+    hit.designLifeYears = life
+    return clone(hit)
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '模板保存失败')
+  }
+}
+
+/** §7.6.5 整树保存（全量替换；保存体无 id，落库补 id；强校验不过整体拒收零写库） */
+export function saveHealthTemplateTreeRow(id: number, body: Record<string, unknown>): HealthTemplateTree | ReturnType<typeof mockFail> {
+  try {
+    const hit = healthTemplateRows.find((t) => t.id === id)
+    if (!hit) return mockFail(`模板不存在${id}`)
+    const dimensions = validateTreeDimensions(body.dimensions)
+    // 全量替换 + 补 id（维度/评分项；评估历史靠明细快照自包含，不受替换影响）
+    let itemId = id * 1000
+    hit.dimensions = dimensions.map((d) => ({
+      id: d.no * 10 + id,
+      no: d.no,
+      name: d.name,
+      weightPercent: d.weightPercent,
+      items: d.items.map((i) => ({ ...i, id: (itemId += 1) })),
+    }))
+    hit.dimensionCount = hit.dimensions.length
+    hit.itemCount = hit.dimensions.reduce((sum, d) => sum + d.items.length, 0)
+    hit.weightSum = Number(hit.dimensions.reduce((sum, d) => sum + d.weightPercent, 0).toFixed(2))
+    return clone(hit)
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '模板保存失败')
+  }
+}
+
+/** §7.6.6 删除模板（级联删维度与评分项；评估历史靠快照自包含不受影响） */
+export function deleteHealthTemplateRow(id: number): boolean | ReturnType<typeof mockFail> {
+  const hit = healthTemplateRows.find((t) => t.id === id)
+  if (!hit) return mockFail(`模板不存在${id}`)
+  healthTemplateRows.splice(healthTemplateRows.indexOf(hit), 1)
+  return true
+}

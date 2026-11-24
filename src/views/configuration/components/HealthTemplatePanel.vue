@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { NAlert, NButton, NForm, NFormItem, NInput, NInputNumber } from 'naive-ui'
 import {
   addHealthTemplate,
@@ -78,9 +79,9 @@ async function doSelect(id: number) {
   }
 }
 
-/* ---------- 未保存修改守卫：切页签/新增/删除/刷新前确认丢弃 ---------- */
+/* ---------- 未保存修改守卫：切模板页签/新增/删除/刷新前确认（可自动保存=保存并切换） ---------- */
 const confirmOpen = ref(false)
-let pendingAction: (() => void) | null = null
+let pendingAction: (() => void | Promise<void>) | null = null
 
 function guard(action: () => void) {
   if (!dirty.value) {
@@ -91,17 +92,51 @@ function guard(action: () => void) {
   confirmOpen.value = true
 }
 
-function confirmLeave() {
+async function confirmLeave() {
   confirmOpen.value = false
   const action = pendingAction
   pendingAction = null
-  action?.()
+  if (!action) return
+  // 模板配置完整时先自动保存（失败留在本页，错误已在红条显示）；不完整按用户选择丢弃
+  if (!treeError.value) {
+    const saved = await saveTemplate()
+    if (!saved) return
+  }
+  await action()
 }
 
 function selectTemplate(id: number) {
   if (id === activeId.value) return
   guard(() => void doSelect(id))
 }
+
+/* 宝安适配（2026-11-24 用户拍板，偏离福永原版）：板块内守卫只覆盖切模板页签/新增/删除/刷新，
+ * 离开本板块（顶栏切页 / 左栏切板块）时未保存修改会静默丢失——两个路由守卫兜底。
+ * 语义（2026-11-24 二次拍板）：「确定」= 自动保存后放行切换（不丢修改）；模板配置不完整
+ * 无法自动保存时才退化为「丢弃并切换」；自动保存失败留在本板块并提示。 */
+async function leaveWithSave(): Promise<boolean> {
+  if (!dirty.value) return true
+  if (treeError.value) {
+    return window.confirm('模板配置不完整（无法自动保存），确定丢弃修改并切换吗？')
+  }
+  if (!window.confirm('有未保存的修改，确定自动保存并切换吗？')) return false
+  const saved = await saveTemplate()
+  if (!saved) {
+    globalMessage()?.error('自动保存失败，已留在本板块，请检查后重试')
+    return false
+  }
+  return true
+}
+
+// 用原生 confirm 同步弹首问；自动保存是异步的，守卫返回 Promise 挂起导航直至落定
+onBeforeRouteLeave(() => leaveWithSave())
+
+// 缺口补全：左栏切板块是同路由仅 query 变化（leave 守卫不触发），但 v-if 链会立刻
+// 卸载本面板丢弃修改——用 update 守卫补位；留在本板块（query 回 health-templates）不拦
+onBeforeRouteUpdate((to) => {
+  if (to.query.board === 'health-templates') return true
+  return leaveWithSave()
+})
 
 async function retryList() {
   await reload()
@@ -157,12 +192,19 @@ async function saveShell() {
     error.value = '请输入设计寿命（≥1 年）'
     return
   }
-  if (await submit(async () => {
-    const tree = await addHealthTemplate({ code, typeName, designLifeYears: life })
-    await doSelect(tree.id)
-  })) {
+  if (
+    await submit(
+      async () => {
+        const tree = await addHealthTemplate({ code, typeName, designLifeYears: life })
+        await doSelect(tree.id)
+      },
+      true,
+      // 宝安适配：成功提示走 mutation 层参数（福永原版面板自带 globalMessage，
+      // 中央 toast 上线后改为传参，避免双重提示）
+      '模板壳已创建，请在页面中配置维度与评分项并保存（完成前该类型箱柜评估不可用）',
+    )
+  ) {
     shellOpen.value = false
-    globalMessage()?.success('模板壳已创建，请在页面中配置维度与评分项并保存（完成前该类型箱柜评估不可用）')
   }
 }
 
@@ -178,45 +220,57 @@ async function saveInfo() {
     error.value = '请完整填写模板编码、类型名称与设计寿命'
     return
   }
-  if (await submit(async () => {
-    const shell = await updateHealthTemplate(id, { code, typeName, designLifeYears: life })
-    editorCode.value = shell.code
-    editorTypeName.value = shell.typeName
-    editorLife.value = shell.designLifeYears
-    shellSnapshot.value = shellNow()
-  })) {
+  if (
+    await submit(
+      async () => {
+        const shell = await updateHealthTemplate(id, { code, typeName, designLifeYears: life })
+        editorCode.value = shell.code
+        editorTypeName.value = shell.typeName
+        editorLife.value = shell.designLifeYears
+        shellSnapshot.value = shellNow()
+      },
+      true,
+      '模板基本信息已保存',
+    )
+  ) {
     infoOpen.value = false
-    globalMessage()?.success('模板基本信息已保存')
   }
 }
 
-/* ---------- 保存模板（壳有变更先 7.6.4，再 7.6.5 整树全量替换） ---------- */
-async function saveEditor() {
+/* ---------- 保存模板（壳有变更先 7.6.4，再 7.6.5 整树全量替换） ----------
+ * saveTemplate 抽成可复用的布尔函数：页面「保存模板」按钮与离开守卫的「自动保存」共用。 */
+async function saveTemplate(): Promise<boolean> {
   const id = activeId.value
-  if (!id || treeError.value || saving.value) return
+  if (!id || treeError.value || saving.value) return false
   const code = editorCode.value.trim()
   const typeName = editorTypeName.value.trim()
   const life = editorLife.value
   if (!code || !typeName || !life || life < 1) {
     error.value = '请完整填写模板编码、类型名称与设计寿命'
-    return
+    return false
   }
-  if (await submit(async () => {
-    if (shellNow() !== shellSnapshot.value) {
-      const shell = await updateHealthTemplate(id, { code, typeName, designLifeYears: life })
-      editorCode.value = shell.code
-      editorTypeName.value = shell.typeName
-      editorLife.value = shell.designLifeYears
-    }
-    // 7.6.5 全量替换；保存成功用返回整树回填（rule.md 配置中心口径）
-    const saved = await saveHealthTemplateTree(id, toTreeSaveBody(draft.value))
-    draft.value = cloneDimensions(saved.dimensions)
-    shellSnapshot.value = shellNow()
-    treeSnapshot.value = JSON.stringify(draft.value)
-    globalMessage()?.success('模板已保存（全量替换维度与评分项，保存即生效）')
-  })) {
-    // 保存成功留在本页继续编辑
-  }
+  return !!(await submit(
+    async () => {
+      if (shellNow() !== shellSnapshot.value) {
+        const shell = await updateHealthTemplate(id, { code, typeName, designLifeYears: life })
+        editorCode.value = shell.code
+        editorTypeName.value = shell.typeName
+        editorLife.value = shell.designLifeYears
+      }
+      // 7.6.5 全量替换；保存成功用返回整树回填（rule.md 配置中心口径）
+      const saved = await saveHealthTemplateTree(id, toTreeSaveBody(draft.value))
+      draft.value = cloneDimensions(saved.dimensions)
+      shellSnapshot.value = shellNow()
+      treeSnapshot.value = JSON.stringify(draft.value)
+    },
+    true,
+    '模板已保存（全量替换维度与评分项，保存即生效）',
+  ))
+}
+
+/** 页面「保存模板」按钮：保存成功留在本页继续编辑 */
+async function saveEditor() {
+  await saveTemplate()
 }
 
 /* ---------- 维度 / 评分项操作 ---------- */
@@ -478,12 +532,18 @@ onMounted(async () => {
       <p>评估历史靠明细快照自包含，不受影响。</p>
     </ConfigDialog>
 
-    <!-- 未保存修改守卫 -->
+    <!-- 未保存修改守卫（宝安适配：可自动保存时确定=保存并切换，不完整才丢弃） -->
     <ConfigDialog
-      :show="confirmOpen" :saving="false" :error="''" title="有未保存的修改" action="放弃并继续"
-      @close="confirmOpen = false" @submit="confirmLeave"
+      :show="confirmOpen"
+      :saving="false"
+      :error="''"
+      title="有未保存的修改"
+      :action="treeError ? '丢弃并切换' : '保存并切换'"
+      @close="confirmOpen = false"
+      @submit="confirmLeave"
     >
-      <p>当前模板有未保存的修改，继续将丢弃这些修改。</p>
+      <p v-if="treeError">模板配置不完整（{{ treeError }}），无法自动保存，切换将丢弃这些修改。</p>
+      <p v-else>当前模板有未保存的修改，确定后将自动保存并切换。</p>
     </ConfigDialog>
   </div>
 </template>

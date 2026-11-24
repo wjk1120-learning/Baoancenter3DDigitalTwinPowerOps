@@ -50,7 +50,12 @@ import {
   submitAssessment,
   fetchAssessmentRecords,
   fetchAssessmentDetail,
+  addHealthTemplateRow,
+  updateHealthTemplateRow,
+  saveHealthTemplateTreeRow,
+  deleteHealthTemplateRow,
 } from './data/configuration'
+import { addCameraRow, deleteCameraRow, updateCameraRow } from './data/ezviz'
 import type { DeviceFilter } from '../api/configuration/inventory'
 import {
   getCabinetDefects,
@@ -279,6 +284,12 @@ const routes: MockRoute[] = [
   // ── 萤石视频监控（§6，环境监控页）──
   // §6.1 摄像头台账列表
   route('GET /ezviz/cameras', () => cameraRows),
+  // §6.2/6.3/6.4 台账增删改（批次 3：配置中心监控配置板块接回；序列号全局唯一）
+  route('POST /ezviz/cameras', ({ body }) => addCameraRow(asBody(body))),
+  route('POST /ezviz/cameras/:id/update', ({ params, body }) =>
+    updateCameraRow(Number(params.id), asBody(body)),
+  ),
+  route('POST /ezviz/cameras/:id/delete', ({ params }) => deleteCameraRow(Number(params.id))),
   // §6.5 直播取流（假 ezopen 地址 + 假 accessToken，真播放器播不了按「无画面隐藏」消隐）
   route('GET /ezviz/cameras/:id/live-url', ({ params }) => getMockLiveUrl(Number(params.id))),
   // §6.6 回放取流
@@ -347,9 +358,20 @@ const routes: MockRoute[] = [
   route('GET /configuration/building-floor-stats', ({ query }) =>
     getConfigFloorStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
   ),
-  // §7.6.1/§7.6.2 健康度模板列表与整树（只读，写随批次 3）
+  // §7.6.1/§7.6.2 健康度模板列表与整树
   route('GET /health/templates', () => getHealthTemplateList()),
   route('GET /health/templates/:id', ({ params }) => getHealthTemplateTree(Number(params.id))),
+  // §7.6.3-7.6.6 模板 CRUD（批次 3：壳唯一性/整树五规则强校验/全量替换/删除）
+  route('POST /health/templates', ({ body }) => addHealthTemplateRow(asBody(body))),
+  route('POST /health/templates/:id/update', ({ params, body }) =>
+    updateHealthTemplateRow(Number(params.id), asBody(body)),
+  ),
+  route('POST /health/templates/:id/tree/save', ({ params, body }) =>
+    saveHealthTemplateTreeRow(Number(params.id), asBody(body)),
+  ),
+  route('POST /health/templates/:id/delete', ({ params }) =>
+    deleteHealthTemplateRow(Number(params.id)),
+  ),
 
   // ── 健康度评估链路（§7.1-7.4，批次 2）──
   // ⚠ :id 参数路由与字面路由同为 3 段，template 必须登记在 :id 之前（匹配器按顺序）
