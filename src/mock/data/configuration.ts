@@ -1,10 +1,35 @@
 /**
- * §5.33 CET 数据类型字典（假数据，docs/FY-Hospital-API.md）。
- * 与后端内置 8 个 DataID 一致：Ia/Ib/Ic/Pa/Pb/Pc/Pfs/PEsum；
- * typeName 与 §1.11 mock 测点名（MEAS_TEMPLATE）同体系，抽屉按名称匹配实时值。
+ * 配置中心 mock 种子与板块内 CRUD（契约 = docs/FY-Hospital-API.md 第五章 §5.1-5.33 +
+ * 第七章 §7.6；照搬福永配置中心交互，接口形状对齐 api/configuration 与 api/health）。
+ *
+ * 口径（用户拍板「板块内自洽」）：配置中心各板块持有独立数据副本，增删改只在本板块
+ * 生效，不联动 device/event 等其它页面的 mock 数据；命名与宝安 mock 现有命名同源
+ * （楼栋 = data/device.ts 的真实楼栋、配电房 = 6 房、柜名 = 「n#变 柜名」格式）。
+ * 写接口失败路径用 mockFail(msg) 复刻后端 code=0（重名校验/删除有关联项等）。
+ *
+ * 批次说明：字典三板块（设备类型/配电房/楼栋）写链路本批交付；通道/设备/箱柜/评估/
+ * 模板/监控/能耗统计的写链路随批次 2-4 补（见 routes.ts 各段注释）。
  */
+import type {
+  BuildingConfig,
+  DeviceTypeConfig,
+  SwitchingConfig,
+} from '../../api/configuration/configuration'
+import type {
+  CabinetConfig,
+  ChannelConfig,
+  DeviceConfig,
+  DeviceFilter,
+} from '../../api/configuration/inventory'
+import type {
+  BuildingStatsDevice,
+  FloorStatsGroup,
+} from '../../api/configuration/energy'
+import type { HealthTemplateTree } from '../../api/health/types'
 import type { CetDataType } from '../../api/configuration/types'
+import { mockFail } from '../mockFail'
 
+// ---- §5.33 CET 数据类型字典（原有种子：与后端内置 8 个 DataID 一致，测点抽屉共用） ----
 export const CET_DATA_TYPES: CetDataType[] = [
   { id: 1, typeCode: 'Ia', typeName: 'A相电流', dataId: 1000001, remark: null },
   { id: 2, typeCode: 'Ib', typeName: 'B相电流', dataId: 1000002, remark: null },
@@ -18,4 +43,352 @@ export const CET_DATA_TYPES: CetDataType[] = [
 
 export function getCetDataTypes(): CetDataType[] {
   return CET_DATA_TYPES
+}
+
+// ---- §5.20 楼栋字典（与 data/device.ts buildings 同名同 id；独立副本，板块内自洽） ----
+export const buildingRows: BuildingConfig[] = [
+  { id: 1, buildingName: '门诊1号楼' },
+  { id: 2, buildingName: '门诊2号楼' },
+  { id: 3, buildingName: '综合楼' },
+  { id: 4, buildingName: '住院楼' },
+  { id: 5, buildingName: '行政楼' },
+  { id: 6, buildingName: '宿舍楼' },
+  // 新建楼栋样板：无箱柜关联，可删（演示 §5.23 成功路径）
+  { id: 7, buildingName: '科教楼（在建）' },
+]
+
+// ---- §5.1 设备类型字典 ----
+export const deviceTypeRows: DeviceTypeConfig[] = [
+  { id: 1, name: '低压开关柜', remark: 'P05 系列馈线柜' },
+  { id: 2, name: '电容补偿柜', remark: null },
+  { id: 3, name: '进线及计量柜', remark: null },
+  { id: 4, name: '强电井配电箱', remark: '楼层配电箱，随楼层强电井设置' },
+  { id: 5, name: '医用IT隔离电源柜', remark: '手术室/ICU 专用' },
+  { id: 6, name: '环网柜', remark: null },
+]
+
+// ---- §5.5 配电房字典（宝安 6 房口径） ----
+export const switchingRows: SwitchingConfig[] = [
+  { id: 1, switchingName: '1#变低压配电房' },
+  { id: 2, switchingName: '2#变低压配电房' },
+  { id: 3, switchingName: '3#变低压配电房' },
+  { id: 4, switchingName: '4#变低压配电房' },
+  { id: 5, switchingName: '5#变低压配电房' },
+  { id: 6, switchingName: '6#变低压配电房' },
+]
+
+// ---- §5.9 通道字典（CET 采集通道） ----
+export const channelRows: ChannelConfig[] = [
+  { channelId: 1, channelName: '1#变压器回路' },
+  { channelId: 2, channelName: '2#变压器回路' },
+  { channelId: 3, channelName: '门诊楼回路' },
+  { channelId: 4, channelName: '住院楼回路' },
+]
+
+// ---- §5.13 设备列表（含 unbound / no-location 样本供三档筛选演示） ----
+export const deviceRows: DeviceConfig[] = [
+  { channelId: 1, deviceId: 6101, deviceName: 'P05-1 门诊A栋', enabled: 1, superName: '1#变 1AA1进线及计量柜', locationNumbers: ['门诊1号楼G层东井'] },
+  { channelId: 1, deviceId: 6102, deviceName: 'P05-2 门诊A栋', enabled: 1, superName: '1#变 1AA1进线及计量柜', locationNumbers: ['门诊1号楼3层西井'] },
+  { channelId: 1, deviceId: 6103, deviceName: 'P06-1 综合楼', enabled: 1, superName: '1#变 1AA3馈线柜', locationNumbers: ['综合楼G层配电间'] },
+  { channelId: 2, deviceId: 6201, deviceName: 'P07-1 住院楼', enabled: 1, superName: '2#变 2AA1进线及计量柜', locationNumbers: ['住院楼B1层配电间'] },
+  { channelId: 2, deviceId: 6202, deviceName: 'P07-2 住院楼', enabled: 0, superName: '2#变 2AA2馈线柜', locationNumbers: ['住院楼5层东井'] },
+  { channelId: 3, deviceId: 6301, deviceName: 'P08-1 行政楼', enabled: 1, superName: '3#变 3AA1电容补偿柜', locationNumbers: ['行政楼G层配电间'] },
+  { channelId: 3, deviceId: 6302, deviceName: 'P08-2 行政楼', enabled: 1, superName: '3#变 3AA1电容补偿柜', locationNumbers: [] },
+  { channelId: 4, deviceId: 6401, deviceName: 'P09-1 宿舍楼', enabled: 1, superName: '4#变 4AA1馈线柜', locationNumbers: ['宿舍楼1层配电间'] },
+  { channelId: 4, deviceId: 6402, deviceName: 'UPS-1 手术室', enabled: 1, superName: null, locationNumbers: ['综合楼4层手术室'] },
+  { channelId: 2, deviceId: 6203, deviceName: 'P07-3 住院楼', enabled: 1, superName: null, locationNumbers: [] },
+  { channelId: 1, deviceId: 6104, deviceName: 'P05-3 门诊A栋', enabled: 1, superName: '1#变 1AA1进线及计量柜', locationNumbers: ['门诊1号楼5层东井'] },
+  { channelId: 3, deviceId: 6303, deviceName: 'IT-1 ICU电源', enabled: 1, superName: '3#变 3AA2医用IT柜', locationNumbers: ['综合楼6层ICU'] },
+  { channelId: 2, deviceId: 6204, deviceName: 'P07-4 住院楼', enabled: 1, superName: '2#变 2AA3馈线柜', locationNumbers: [] },
+  { channelId: 1, deviceId: 6105, deviceName: 'P05-4 门诊B栋', enabled: 1, superName: '1#变 1AA4馈线柜', locationNumbers: ['门诊2号楼2层东井'] },
+]
+
+// ---- §5.15 箱柜档案（16 条覆盖分页；含 1 条 deviceNumber=null 的 BUG-011 样本） ----
+export const cabinetRows: CabinetConfig[] = [
+  { id: 1, buildingId: 1, buildingName: '门诊1号楼', superName: '1#变 1AA1进线及计量柜', deviceNumber: 'BZ000001', deviceTypeId: 3, deviceTypeName: '进线及计量柜', commissionDate: '2020-06-30', switchingId: 1, switchingName: '1#变低压配电房', status: 1, health: 92 },
+  { id: 2, buildingId: 1, buildingName: '门诊1号楼', superName: '1#变 1AA4馈线柜', deviceNumber: 'BZ000002', deviceTypeId: 1, deviceTypeName: '低压开关柜', commissionDate: '2020-06-30', switchingId: 1, switchingName: '1#变低压配电房', status: 1, health: 88 },
+  { id: 3, buildingId: 2, buildingName: '门诊2号楼', superName: '1#变 1AC1无功补偿柜', deviceNumber: 'BZ000003', deviceTypeId: 2, deviceTypeName: '电容补偿柜', commissionDate: '2021-03-15', switchingId: 1, switchingName: '1#变低压配电房', status: 1, health: 76 },
+  { id: 4, buildingId: 3, buildingName: '综合楼', superName: '1#变 1AA3馈线柜', deviceNumber: 'BZ000004', deviceTypeId: 1, deviceTypeName: '低压开关柜', commissionDate: '2021-03-15', switchingId: 1, switchingName: '1#变低压配电房', status: 1, health: 81 },
+  { id: 5, buildingId: 4, buildingName: '住院楼', superName: '2#变 2AA1进线及计量柜', deviceNumber: 'BZ000005', deviceTypeId: 3, deviceTypeName: '进线及计量柜', commissionDate: '2019-11-20', switchingId: 2, switchingName: '2#变低压配电房', status: 1, health: 95 },
+  { id: 6, buildingId: 4, buildingName: '住院楼', superName: '2#变 2AA2馈线柜', deviceNumber: 'BZ000006', deviceTypeId: 1, deviceTypeName: '低压开关柜', commissionDate: '2019-11-20', switchingId: 2, switchingName: '2#变低压配电房', status: 1, health: 64 },
+  { id: 7, buildingId: 4, buildingName: '住院楼', superName: '2#变 2AA3馈线柜', deviceNumber: 'BZ000007', deviceTypeId: 1, deviceTypeName: '低压开关柜', commissionDate: '2019-11-20', switchingId: 2, switchingName: '2#变低压配电房', status: 1, health: 58 },
+  { id: 8, buildingId: 5, buildingName: '行政楼', superName: '3#变 3AA1电容补偿柜', deviceNumber: 'BZ000008', deviceTypeId: 2, deviceTypeName: '电容补偿柜', commissionDate: '2022-08-01', switchingId: 3, switchingName: '3#变低压配电房', status: 1, health: 90 },
+  { id: 9, buildingId: 3, buildingName: '综合楼', superName: '3#变 3AA2医用IT柜', deviceNumber: 'BZ000009', deviceTypeId: 5, deviceTypeName: '医用IT隔离电源柜', commissionDate: '2022-08-01', switchingId: 3, switchingName: '3#变低压配电房', status: 1, health: 97 },
+  { id: 10, buildingId: 6, buildingName: '宿舍楼', superName: '4#变 4AA1馈线柜', deviceNumber: 'BZ000010', deviceTypeId: 1, deviceTypeName: '低压开关柜', commissionDate: '2018-05-10', switchingId: 4, switchingName: '4#变低压配电房', status: 1, health: 72 },
+  { id: 11, buildingId: 1, buildingName: '门诊1号楼', superName: '门诊1号楼G层强电井配电箱', deviceNumber: null, deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: null, switchingId: null, switchingName: null, status: 1, health: 85 },
+  { id: 12, buildingId: 1, buildingName: '门诊1号楼', superName: '门诊1号楼3层强电井配电箱', deviceNumber: 'BZ000012', deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: '2020-06-30', switchingId: null, switchingName: null, status: 1, health: 80 },
+  { id: 13, buildingId: 2, buildingName: '门诊2号楼', superName: '门诊2号楼2层强电井配电箱', deviceNumber: 'BZ000013', deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: '2020-06-30', switchingId: null, switchingName: null, status: 1, health: 83 },
+  { id: 14, buildingId: 3, buildingName: '综合楼', superName: '综合楼G层强电井配电箱', deviceNumber: 'BZ000014', deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: '2021-03-15', switchingId: null, switchingName: null, status: 0, health: 100 },
+  { id: 15, buildingId: 4, buildingName: '住院楼', superName: '住院楼5层强电井配电箱', deviceNumber: 'BZ000015', deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: '2019-11-20', switchingId: null, switchingName: null, status: 1, health: 69 },
+  { id: 16, buildingId: 5, buildingName: '行政楼', superName: '行政楼G层强电井配电箱', deviceNumber: 'BZ000016', deviceTypeId: 4, deviceTypeName: '强电井配电箱', commissionDate: '2022-08-01', switchingId: null, switchingName: null, status: 0, health: 100 },
+]
+
+// ---- §5.24 楼栋能耗统计（buildingId=0 为全院哨兵行；一设备至多一行） ----
+export const buildingStatsRows: BuildingStatsDevice[] = [
+  { buildingId: 1, buildingName: '门诊1号楼', deviceId: 6101, channelId: 1, coefficient: 1 },
+  { buildingId: 1, buildingName: '门诊1号楼', deviceId: 6102, channelId: 1, coefficient: 1 },
+  { buildingId: 1, buildingName: '门诊1号楼', deviceId: 6105, channelId: 1, coefficient: 1 },
+  { buildingId: 3, buildingName: '综合楼', deviceId: 6103, channelId: 1, coefficient: 1 },
+  { buildingId: 3, buildingName: '综合楼', deviceId: 6402, channelId: 2, coefficient: 1 },
+  { buildingId: 4, buildingName: '住院楼', deviceId: 6201, channelId: 2, coefficient: 1 },
+  { buildingId: 4, buildingName: '住院楼', deviceId: 6203, channelId: 2, coefficient: -1 },
+  { buildingId: 5, buildingName: '行政楼', deviceId: 6301, channelId: 3, coefficient: 1 },
+  { buildingId: 6, buildingName: '宿舍楼', deviceId: 6401, channelId: 4, coefficient: 1 },
+  { buildingId: 0, buildingName: '全院', deviceId: 6303, channelId: 3, coefficient: 1 },
+]
+
+// ---- §5.29 楼层能耗统计（floor 口径 G/数字/负数；同楼层多设备带系数） ----
+export const floorStatsRows: FloorStatsGroup[] = [
+  { buildingId: 1, buildingName: '门诊1号楼', floor: 'G', devices: [{ deviceId: 6101, coefficient: 1 }] },
+  { buildingId: 1, buildingName: '门诊1号楼', floor: '3', devices: [{ deviceId: 6102, coefficient: 1 }] },
+  { buildingId: 1, buildingName: '门诊1号楼', floor: '5', devices: [{ deviceId: 6104, coefficient: 1 }] },
+  { buildingId: 2, buildingName: '门诊2号楼', floor: '2', devices: [{ deviceId: 6105, coefficient: 1 }] },
+  { buildingId: 3, buildingName: '综合楼', floor: 'G', devices: [{ deviceId: 6103, coefficient: 1 }] },
+  { buildingId: 3, buildingName: '综合楼', floor: '4', devices: [{ deviceId: 6402, coefficient: 1 }] },
+  { buildingId: 3, buildingName: '综合楼', floor: '6', devices: [{ deviceId: 6303, coefficient: 1 }] },
+  { buildingId: 4, buildingName: '住院楼', floor: '-1', devices: [{ deviceId: 6201, coefficient: 1 }] },
+  { buildingId: 4, buildingName: '住院楼', floor: '5', devices: [{ deviceId: 6202, coefficient: 1 }, { deviceId: 6204, coefficient: 1 }] },
+]
+
+// ---- §7.6.1/§7.6.2 健康度模板（1 完整树满足强校验 + 1 空壳；列表/树共用一份数据） ----
+export const healthTemplateRows: HealthTemplateTree[] = [
+  {
+    id: 1,
+    code: 'TPL-LOWVOLT-01',
+    typeName: '低压开关柜',
+    designLifeYears: 15,
+    createdAt: '2026-10-12 09:30:00',
+    dimensionCount: 3,
+    itemCount: 5,
+    weightSum: 100,
+    dimensions: [
+      {
+        id: 11,
+        no: 1,
+        name: '外观与安装',
+        weightPercent: 30,
+        items: [
+          { id: 111, code: 'dim1_rust', name: '柜体锈蚀变形', subWeight: 0.5, normal: '柜体表面无锈蚀变形，漆面完好', attention: '轻微锈斑，不影响结构', abnormal: '明显锈蚀，漆面剥落', severe: '柜体变形或锈穿，存在安全隐患', autoCalculated: false },
+          { id: 112, code: 'dim1_label', name: '标识与警示齐全', subWeight: 0.5, normal: '标识清晰齐全，与系统一致', attention: '个别标识模糊', abnormal: '多数标识缺失或错误', severe: '无标识，误操作风险高', autoCalculated: false },
+        ],
+      },
+      {
+        id: 12,
+        no: 2,
+        name: '运行状态',
+        weightPercent: 40,
+        items: [
+          { id: 121, code: 'dim2_temp', name: '柜内温度', subWeight: 0.6, normal: '温升在允许范围内', attention: '温升偏高但未超限', abnormal: '温升超限，需查明原因', severe: '温度异常升高，立即停电检查', autoCalculated: false },
+          { id: 122, code: 'dim2_noise', name: '运行声响与异味', subWeight: 0.4, normal: '无异常声响和异味', attention: '轻微嗡嗡声', abnormal: '明显放电声或焦味', severe: '剧烈异响冒烟，紧急停机', autoCalculated: false },
+        ],
+      },
+      {
+        id: 13,
+        no: 3,
+        name: '使用寿命',
+        weightPercent: 30,
+        items: [
+          { id: 131, code: 'dim6_service_life', name: '投运年限自动评定', subWeight: 1, normal: '', attention: '', abnormal: '', severe: '', autoCalculated: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 2,
+    code: 'TPL-IT-01',
+    typeName: '医用IT隔离电源柜',
+    designLifeYears: 10,
+    createdAt: null,
+    dimensionCount: 0,
+    itemCount: 0,
+    weightSum: 0,
+    dimensions: [],
+  },
+]
+
+/* ================= 查询（板块内副本直读；返回浅拷贝防调用方改种子） ================= */
+
+const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
+
+export const getDeviceTypes = () => clone(deviceTypeRows)
+export const getSwitchings = () => clone(switchingRows)
+export const getBuildings = () => clone(buildingRows)
+export const getChannels = () => clone(channelRows)
+
+/** §5.13 三档筛选：''=全部 / unbound=未绑定箱柜 / no-location=无管理编号 */
+export function getDevices(filter: DeviceFilter = ''): DeviceConfig[] {
+  const rows = clone(deviceRows)
+  if (filter === 'unbound') return rows.filter((d) => d.superName == null)
+  if (filter === 'no-location') return rows.filter((d) => d.locationNumbers.length === 0)
+  return rows
+}
+
+export const getCabinets = () => clone(cabinetRows)
+
+/** §5.19 箱柜模糊检索（联想下拉用；返回 id + superName） */
+export function searchCabinets(keyword: string): { id: number; superName: string }[] {
+  const kw = keyword.trim()
+  if (!kw) return []
+  return cabinetRows
+    .filter((c) => c.superName.includes(kw) || (c.deviceNumber ?? '').includes(kw))
+    .map((c) => ({ id: c.id, superName: c.superName }))
+}
+
+export function getBuildingStats(buildingId?: number): BuildingStatsDevice[] {
+  const rows = clone(buildingStatsRows)
+  if (buildingId == null || Number.isNaN(buildingId)) return rows
+  return rows.filter((r) => r.buildingId === buildingId)
+}
+
+export function getFloorStats(buildingId?: number): FloorStatsGroup[] {
+  const rows = clone(floorStatsRows)
+  if (buildingId == null || Number.isNaN(buildingId)) return rows
+  return rows.filter((r) => r.buildingId === buildingId)
+}
+
+/** §7.6.1 模板列表（树投影成 Summary 行） */
+export function getHealthTemplateList() {
+  return healthTemplateRows.map((t) => ({
+    id: t.id,
+    code: t.code,
+    typeName: t.typeName,
+    designLifeYears: t.designLifeYears,
+    createdAt: t.createdAt,
+    dimensionCount: t.dimensionCount,
+    itemCount: t.itemCount,
+    weightSum: t.weightSum,
+  }))
+}
+
+/** §7.6.2 模板整树（不存在返回 null → 前端 normTree 报「整树」无效） */
+export function getHealthTemplateTree(id: number): HealthTemplateTree | null {
+  const hit = healthTemplateRows.find((t) => t.id === id)
+  return hit ? clone(hit) : null
+}
+
+/* ================= 字典三板块写链路（本批交付；失败路径复刻后端 code=0） ================= */
+
+function nextId(rows: { id: number }[]): number {
+  return rows.reduce((max, r) => Math.max(max, r.id), 0) + 1
+}
+
+/** 通用：名称查重（排除自身 id） */
+function nameTaken(rows: { id: number; name: string }[], name: string, excludeId?: number) {
+  return rows.some((r) => r.id !== excludeId && r.name === name)
+}
+
+/** §5.2 新增设备类型（name 唯一，≤64 字符；remark ≤255） */
+export function addDeviceType(body: { name?: unknown; remark?: unknown }) {
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name) return mockFail('设备类型名称不能为空')
+  if (name.length > 64) return mockFail('设备类型名称不能超过 64 字符')
+  if (nameTaken(deviceTypeRows, name)) return mockFail(`设备类型名称已存在：${name}`)
+  const remark = typeof body.remark === 'string' && body.remark.trim() ? body.remark.trim().slice(0, 255) : null
+  const row: DeviceTypeConfig = { id: nextId(deviceTypeRows), name, remark }
+  deviceTypeRows.push(row)
+  return clone(row)
+}
+
+/** §5.3 修改设备类型（name 必填；remark 缺省=保留、空串=清除） */
+export function renameDeviceType(id: number, body: { name?: unknown; remark?: unknown }) {
+  const hit = deviceTypeRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`设备类型不存在${id}`)
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name) return mockFail('设备类型名称不能为空')
+  if (nameTaken(deviceTypeRows, name, id)) return mockFail(`设备类型名称已存在：${name}`)
+  hit.name = name
+  if (typeof body.remark === 'string') hit.remark = body.remark.trim() ? body.remark.trim().slice(0, 255) : null
+  return clone(hit)
+}
+
+/** §5.4 删除设备类型（有关联箱柜 → code=0）。
+ *  ⚠️ 契约附录标注 data:null，但前端 deleteConfig/validation 仅放行 /data-types/ 前缀的
+ *  null，要求设备类型/配电房删除显式返回 true（参考包口径如此，疑似附录文档滞后）；
+ *  mock 按前端校验口径返回 true，切真后端时以联调实测为准。 */
+export function deleteDeviceType(id: number) {
+  const hit = deviceTypeRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`设备类型不存在${id}`)
+  const refCount = cabinetRows.filter((c) => c.deviceTypeId === id).length
+  if (refCount > 0) {
+    return mockFail(`该设备类型已关联 ${refCount} 个箱柜，不可删除`)
+  }
+  deviceTypeRows.splice(deviceTypeRows.indexOf(hit), 1)
+  return true
+}
+
+/** §5.6 新增配电房（switchingName 唯一） */
+export function addSwitching(body: { switchingName?: unknown }) {
+  const name = typeof body.switchingName === 'string' ? body.switchingName.trim() : ''
+  if (!name) return mockFail('配电房名称不能为空')
+  if (switchingRows.some((r) => r.switchingName === name)) return mockFail(`配电房名称已存在：${name}`)
+  const row: SwitchingConfig = { id: nextId(switchingRows), switchingName: name }
+  switchingRows.push(row)
+  return clone(row)
+}
+
+/** §5.7 修改配电房 */
+export function renameSwitching(id: number, body: { switchingName?: unknown }) {
+  const hit = switchingRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`配电房不存在${id}`)
+  const name = typeof body.switchingName === 'string' ? body.switchingName.trim() : ''
+  if (!name) return mockFail('配电房名称不能为空')
+  if (switchingRows.some((r) => r.id !== id && r.switchingName === name)) {
+    return mockFail(`配电房名称已存在：${name}`)
+  }
+  hit.switchingName = name
+  return clone(hit)
+}
+
+/** §5.8 删除配电房（有归属箱柜 → code=0；返回 true 口径同 deleteDeviceType 注释） */
+export function deleteSwitching(id: number) {
+  const hit = switchingRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`配电房不存在${id}`)
+  const refCount = cabinetRows.filter((c) => c.switchingId === id).length
+  if (refCount > 0) {
+    return mockFail(`该配电房已关联 ${refCount} 个箱柜，不可删除`)
+  }
+  switchingRows.splice(switchingRows.indexOf(hit), 1)
+  return true
+}
+
+/** §5.21 新增楼栋（buildingName 唯一；楼栋是能耗链路唯一事实源） */
+export function addBuilding(body: { buildingName?: unknown }) {
+  const name = typeof body.buildingName === 'string' ? body.buildingName.trim() : ''
+  if (!name) return mockFail('楼栋名称不能为空')
+  if (buildingRows.some((r) => r.buildingName === name)) return mockFail(`楼栋名称已存在：${name}`)
+  const row: BuildingConfig = { id: nextId(buildingRows), buildingName: name }
+  buildingRows.push(row)
+  return clone(row)
+}
+
+/** §5.22 修改楼栋 */
+export function renameBuilding(id: number, body: { buildingName?: unknown }) {
+  const hit = buildingRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`楼栋不存在${id}`)
+  const name = typeof body.buildingName === 'string' ? body.buildingName.trim() : ''
+  if (!name) return mockFail('楼栋名称不能为空')
+  if (buildingRows.some((r) => r.id !== id && r.buildingName === name)) {
+    return mockFail(`楼栋名称已存在：${name}`)
+  }
+  hit.buildingName = name
+  return clone(hit)
+}
+
+/** §5.23 删除楼栋（有关联箱柜 → code=0；事务三写级联：楼栋+能耗楼栋映射+楼层映射） */
+export function deleteBuilding(id: number) {
+  const hit = buildingRows.find((r) => r.id === id)
+  if (!hit) return mockFail(`楼栋不存在${id}`)
+  const refCount = cabinetRows.filter((c) => c.buildingId === id).length
+  if (refCount > 0) {
+    return mockFail(`该楼栋已关联 ${refCount} 个箱柜，不可删除`)
+  }
+  buildingRows.splice(buildingRows.indexOf(hit), 1)
+  // 契约级联：同事务删能耗楼栋映射与楼层映射（板块内副本一并清理；历史统计行按契约保留）
+  for (let i = buildingStatsRows.length - 1; i >= 0; i--) {
+    if (buildingStatsRows[i]!.buildingId === id) buildingStatsRows.splice(i, 1)
+  }
+  for (let i = floorStatsRows.length - 1; i >= 0; i--) {
+    if (floorStatsRows[i]!.buildingId === id) floorStatsRows.splice(i, 1)
+  }
+  return true
 }

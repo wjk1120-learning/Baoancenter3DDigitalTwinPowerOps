@@ -6,7 +6,7 @@ import { AUTH_CENTER_LOGIN_URL } from '../config/authConfig'
 import { logoutOnServer } from '../api/auth/auth'
 import { clearAuthSession, readAuthUser } from '../utils/session'
 import { usePageTabsStore } from '../store/pageTabs'
-import { canAccessOperationsPlatform } from '../utils/operationsAccess'
+import { canAccessConfigurationCenter, canAccessOperationsPlatform } from '../utils/operationsAccess'
 import { openOperationsPlatform } from '../utils/jumpToOperations'
 import PageTabs from './PageTabs.vue'
 import logoUrl from '../assets/logo.png'
@@ -21,8 +21,9 @@ const pageTabs = usePageTabsStore()
 const activePath = computed(() => pageTabs.activePath)
 
 const authUser = readAuthUser()
-/** 运维平台入口：内部人员可见；无会话保持可见（与福永「用户信息缺失时保持可见」一致） */
+/** 运维平台/配置中心入口：内部人员可见；无会话保持可见（与福永「用户信息缺失时保持可见」一致） */
 const operationsAllowed = canAccessOperationsPlatform(authUser)
+const configurationAllowed = canAccessConfigurationCenter(authUser)
 const userLabel = computed(() => authUser?.name || authUser?.account || '')
 
 async function logout() {
@@ -37,10 +38,11 @@ async function logout() {
   window.location.replace(AUTH_CENTER_LOGIN_URL)
 }
 
-/** 下拉选项：运维平台仅内部人员可见（外部人员 userLevel=2 隐藏） */
+/** 下拉选项：运维平台/配置中心仅内部人员可见（外部人员 userLevel=2 隐藏） */
 const navOptions = computed(() =>
   navConfig
     .filter((item) => item.id !== 'operations' || operationsAllowed)
+    .filter((item) => item.id !== 'configuration' || configurationAllowed)
     .map((item) => ({ label: item.name, route: item.route })),
 )
 

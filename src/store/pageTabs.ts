@@ -19,6 +19,8 @@ const SINGLETON_BASES = new Set([
   '/defect',
   '/power-room',
   '/training',
+  // 配置中心 ?board= 切板块不开新标签（福永 pageTabs 同款单例口径）
+  '/configuration',
 ])
 
 function basePath(path: string) {

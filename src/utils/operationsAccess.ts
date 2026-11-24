@@ -24,3 +24,12 @@ export function isInternalStaff(user: NavUser | null): boolean {
 export function canAccessOperationsPlatform(user: NavUser | null): boolean {
   return isInternalStaff(user)
 }
+
+/**
+ * 配置中心入口权限：外部人员不可见不可进（福永 operationsAccess.ts 同款；
+ * 路由兜底见 router/index.ts beforeEach）。写操作按钮的按层级显隐另见
+ * views/configuration/useConfiguration.ts 的 canWriteConfiguration。
+ */
+export function canAccessConfigurationCenter(user: NavUser | null): boolean {
+  return isInternalStaff(user)
+}

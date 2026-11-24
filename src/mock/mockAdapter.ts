@@ -1,5 +1,6 @@
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { matchRoute } from './routes'
+import { isMockFail, MOCK_FAIL } from './mockFail'
 
 /** 假延迟：让页面 loading 态可见，也更接近真实链路 */
 const MOCK_LATENCY_MS = 120
@@ -11,7 +12,8 @@ function envelope(data: unknown): { code: number; msg: string; data: unknown } {
 /**
  * axios 官方 adapter 位拦截（挂点在 utils/http/clients.ts）：
  * 请求仍走 utils/http 完整拦截器（信封解包/401/重试），只是不出网络。
- * 命中 routes 返回数据；未命中 console.warn + 空信封，页面拿空数据继续渲染，
+ * 命中 routes 返回数据（handler 返回 mockFail(msg) 时转 code=0 失败信封）；
+ * 未命中 console.warn + 空信封，页面拿空数据继续渲染，
  * 缺口对照 mock/README.md 随阶段 4 页面补路由。
  */
 export function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
@@ -37,7 +39,10 @@ export function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosRe
     setTimeout(() => {
       let data: { code: number; msg: string; data: unknown }
       if (hit) {
-        data = envelope(hit.handler({ params: hit.params, query, body }))
+        const result = hit.handler({ params: hit.params, query, body })
+        data = isMockFail(result)
+          ? { code: 0, msg: result[MOCK_FAIL], data: null }
+          : envelope(result)
       } else {
         console.warn(`[mock] 未命中路由: ${method} ${rawPath}（去 src/mock/routes.ts 补）`)
         data = envelope(null)

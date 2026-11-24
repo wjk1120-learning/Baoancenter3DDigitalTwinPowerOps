@@ -22,6 +22,29 @@ import {
 } from './data/energy'
 import { getCetDataTypes } from './data/configuration'
 import {
+  addBuilding,
+  addDeviceType,
+  addSwitching,
+  getBuildingStats,
+  getBuildings,
+  getCabinets,
+  getChannels,
+  getDeviceTypes,
+  getDevices,
+  getFloorStats as getConfigFloorStats,
+  getHealthTemplateList,
+  getHealthTemplateTree,
+  getSwitchings,
+  renameBuilding,
+  renameDeviceType,
+  renameSwitching,
+  searchCabinets,
+  deleteBuilding,
+  deleteDeviceType,
+  deleteSwitching,
+} from './data/configuration'
+import type { DeviceFilter } from '../api/configuration/inventory'
+import {
   getCabinetDefects,
   getDefectByDeviceNumber,
   getDefectStats,
@@ -53,6 +76,13 @@ export interface MockCallContext {
   query: Record<string, string>
   /** POST body（JSON 已解析） */
   body?: unknown
+}
+
+/** POST body 兜底成对象（配置中心写接口 handler 里直接按字段解构） */
+function asBody(body: unknown): Record<string, unknown> {
+  return body && typeof body === 'object' && !Array.isArray(body)
+    ? (body as Record<string, unknown>)
+    : {}
 }
 
 interface MockRoute {
@@ -252,6 +282,54 @@ const routes: MockRoute[] = [
 
   // ── 配置中心（§5.33 数据类型字典：4.2④ 测点抽屉曲线参数列表用）──
   route('GET /configuration/data-types', () => getCetDataTypes()),
+
+  // ── 配置中心（§5 第五章 + §7.6 模板；写链路分批补：字典三板块本批交付，
+  //    通道/设备/箱柜/评估/模板/监控/能耗统计写随批次 2-4）──
+  // §5.1/§5.5/§5.20 字典三板块列表（板块内自洽副本）
+  route('GET /configuration/device-types', () => getDeviceTypes()),
+  route('GET /configuration/switchings', () => getSwitchings()),
+  route('GET /configuration/buildings', () => getBuildings()),
+  // §5.2/§5.3/§5.4 设备类型增删改（重名 code=0；有关联箱柜不可删）
+  route('POST /configuration/device-types', ({ body }) => addDeviceType(asBody(body))),
+  route('POST /configuration/device-types/:id/rename', ({ params, body }) =>
+    renameDeviceType(Number(params.id), asBody(body)),
+  ),
+  route('POST /configuration/device-types/:id/delete', ({ params }) =>
+    deleteDeviceType(Number(params.id)),
+  ),
+  // §5.6/§5.7/§5.8 配电房增删改
+  route('POST /configuration/switchings', ({ body }) => addSwitching(asBody(body))),
+  route('POST /configuration/switchings/:id/rename', ({ params, body }) =>
+    renameSwitching(Number(params.id), asBody(body)),
+  ),
+  route('POST /configuration/switchings/:id/delete', ({ params }) =>
+    deleteSwitching(Number(params.id)),
+  ),
+  // §5.21/§5.22/§5.23 楼栋增删改（删除事务级联清能耗映射）
+  route('POST /configuration/buildings', ({ body }) => addBuilding(asBody(body))),
+  route('POST /configuration/buildings/:id/rename', ({ params, body }) =>
+    renameBuilding(Number(params.id), asBody(body)),
+  ),
+  route('POST /configuration/buildings/:id/delete', ({ params }) =>
+    deleteBuilding(Number(params.id)),
+  ),
+  // §5.9 通道 / §5.13 设备（?filter= 三档筛选）/ §5.15 箱柜 / §5.19 联想检索（只读，写随批次 2）
+  route('GET /configuration/channels', () => getChannels()),
+  route('GET /configuration/devices', ({ query }) => getDevices((query.filter ?? '') as DeviceFilter)),
+  route('GET /configuration/cabinets', () => getCabinets()),
+  route('GET /configuration/cabinets/fuzzy-search', ({ query }) =>
+    searchCabinets(query.keyword ?? ''),
+  ),
+  // §5.24/§5.29 楼栋/楼层能耗统计（只读，写随批次 4；buildingId 空串=全量）
+  route('GET /configuration/building-stats', ({ query }) =>
+    getBuildingStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
+  ),
+  route('GET /configuration/building-floor-stats', ({ query }) =>
+    getConfigFloorStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
+  ),
+  // §7.6.1/§7.6.2 健康度模板列表与整树（只读，写随批次 3）
+  route('GET /health/templates', () => getHealthTemplateList()),
+  route('GET /health/templates/:id', ({ params }) => getHealthTemplateTree(Number(params.id))),
 ]
 
 /** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */

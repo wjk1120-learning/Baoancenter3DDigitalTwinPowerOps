@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Component } from 'vue'
 import { navConfig } from '../config/navConfig'
-import { readAuthToken } from '../utils/session'
+import { readAuthToken, readAuthUser } from '../utils/session'
+import { canAccessConfigurationCenter } from '../utils/operationsAccess'
 import { redirectUnauthorized } from '../utils/authRedirect'
 
 const placeholderPage = () => import('../views/placeholder/PlaceholderPage.vue')
@@ -14,6 +15,7 @@ const REAL_PAGES: Record<string, () => Promise<Component>> = {
   device: () => import('../views/device-management/DeviceManagementPage.vue'),
   defect: () => import('../views/defect-management/DefectManagementPage.vue'),
   monitor: () => import('../views/environment-monitor/EnvironmentMonitorPage.vue'),
+  configuration: () => import('../views/configuration/ConfigurationPage.vue'),
 }
 
 /**
@@ -54,11 +56,16 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(() => {
+router.beforeEach((to) => {
   if (!readAuthToken()) {
     // 无 token 整页跳运维平台登录（福永同款）；mock 模式 authMock 启动已播种，不会走到
     redirectUnauthorized()
     return false
+  }
+  // 配置中心仅内部人员：外部人员(userLevel=2)直接输 URL 进来时兜底回总览（福永同款；
+  // 入口可见性见 TopBar navOptions 过滤，mock 模式 authMock 播种的内部用户不会走到）
+  if (to.path.startsWith('/configuration') && !canAccessConfigurationCenter(readAuthUser())) {
+    return '/hospital'
   }
   return true
 })

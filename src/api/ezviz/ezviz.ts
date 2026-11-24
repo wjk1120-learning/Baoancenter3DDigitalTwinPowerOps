@@ -1,15 +1,15 @@
 /**
  * 萤石视频接口（§6 萤石视频监控模块，契约唯一依据 = docs/FY-Hospital-API.md §6）。
- * 范围：§6.1 台账列表 / §6.5 直播取流 / §6.6 回放取流 / §6.7 抓拍。
- * （§6.2-6.4 台账增删改随页面「摄像头管理」入口一并移除，改由配置中心承担。）
+ * 范围：§6.1 台账列表 / §6.2-6.4 台账增删改（配置中心监控配置板块，照搬福永）/
+ * §6.5 直播取流 / §6.6 回放取流 / §6.7 抓拍。
  * 通道号不入库，取流统一通道 1（服务端固定）；accessToken 服务端管理、随取流下发。
  * 播放协议固定 ezopen（protocol=1，EZUIKit 播放器唯一支持）；直播清晰度固定流畅
  * （quality=2，多路同屏省带宽）。台账列表/取流/抓拍走 silent（页面按「无画面隐藏」
- * 口径自行消隐）；抓拍不 silent（依赖拦截器统一错误 toast）。
+ * 口径自行消隐，失败不弹全局错误）；增删改不 silent（依赖拦截器统一错误 toast）。
  */
 import { bzGet, bzPost, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import type { RequestConfig } from '../../utils/http'
-import type { CameraVo, PlayUrlVo, PlaybackSource } from './types'
+import type { CameraSaveBody, CameraVo, PlayUrlVo, PlaybackSource } from './types'
 
 function conf(): RequestConfig {
   return { timeout: DATA_FETCH_TIMEOUT_MS, silent: true }
@@ -48,4 +48,19 @@ export function fetchCameraPlaybackUrl(
 /** §6.7 抓拍当前画面 POST /ezviz/cameras/{id}/capture（返回平台托管图片 URL，有时效需即时看） */
 export function captureCamera(cameraId: number): Promise<string> {
   return bzPost<string>(`/ezviz/cameras/${cameraId}/capture`, undefined, conf())
+}
+
+/** §6.2 新增摄像头台账 POST /ezviz/cameras（序列号全局唯一，重复 code=0） */
+export function addCamera(body: CameraSaveBody): Promise<CameraVo> {
+  return bzPost<CameraVo>('/ezviz/cameras', body)
+}
+
+/** §6.3 修改摄像头台账 POST /ezviz/cameras/{id}/update（全量提交目标状态，查重排除自身） */
+export function updateCamera(cameraId: number, body: CameraSaveBody): Promise<CameraVo> {
+  return bzPost<CameraVo>(`/ezviz/cameras/${cameraId}/update`, body)
+}
+
+/** §6.4 删除摄像头台账 POST /ezviz/cameras/{id}/delete */
+export function deleteCamera(cameraId: number): Promise<boolean> {
+  return bzPost<boolean>(`/ezviz/cameras/${cameraId}/delete`)
 }
