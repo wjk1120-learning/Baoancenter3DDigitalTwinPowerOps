@@ -26,6 +26,13 @@ import type {
   FloorStatsGroup,
 } from '../../api/configuration/energy'
 import type { HealthTemplateTree } from '../../api/health/types'
+import type {
+  HealthAssessTemplate,
+  HealthAssessmentDetail,
+  HealthAssessmentRecord,
+  HealthAssessmentResult,
+  HealthGrade,
+} from '../../api/health/types'
 import type { CetDataType } from '../../api/configuration/types'
 import { mockFail } from '../mockFail'
 
@@ -225,10 +232,10 @@ export function getDevices(filter: DeviceFilter = ''): DeviceConfig[] {
 
 export const getCabinets = () => clone(cabinetRows)
 
-/** §5.19 箱柜模糊检索（联想下拉用；返回 id + superName） */
-export function searchCabinets(keyword: string): { id: number; superName: string }[] {
+/** §5.19 箱柜模糊检索（联想下拉用；返回 id + superName；空关键字契约 code=0） */
+export function searchCabinets(keyword: string): { id: number; superName: string }[] | ReturnType<typeof mockFail> {
   const kw = keyword.trim()
-  if (!kw) return []
+  if (!kw) return mockFail('检索关键字不能为空')
   return cabinetRows
     .filter((c) => c.superName.includes(kw) || (c.deviceNumber ?? '').includes(kw))
     .map((c) => ({ id: c.id, superName: c.superName }))
@@ -392,3 +399,420 @@ export function deleteBuilding(id: number) {
   }
   return true
 }
+
+/* ================= §5.14 修改设备（批次 2；superId=0 解绑/>0 换绑，全量差量） ================= */
+
+export function changeDevice(id: number, body: Record<string, unknown>) {
+  const hit = deviceRows.find((d) => d.deviceId === id)
+  if (!hit) return mockFail(`设备不存在${id}`)
+  if (body.superId != null) {
+    const superId = Number(body.superId)
+    if (superId === 0) {
+      hit.superName = null
+    } else {
+      const cabinet = cabinetRows.find((c) => c.id === superId)
+      if (!cabinet) return mockFail(`箱柜不存在${superId}`)
+      hit.superName = cabinet.superName
+    }
+  }
+  if (Array.isArray(body.locationNumbers)) {
+    hit.locationNumbers = [...new Set((body.locationNumbers as unknown[]).map((v) => String(v).trim()).filter(Boolean))].sort()
+  }
+  if (body.enabled === 0 || body.enabled === 1) hit.enabled = body.enabled
+  return clone(hit)
+}
+
+/* ================= §5.16-5.18 箱柜建档/修改/删除（批次 2） ================= */
+
+/** §5.16 建档：编号全局唯一；新柜默认无配电房、开关 0、健康度 100（契约口径） */
+export function addCabinet(body: Record<string, unknown>) {
+  const buildingId = Number(body.buildingId)
+  const deviceTypeId = Number(body.deviceTypeId)
+  const superName = typeof body.superName === 'string' ? body.superName.trim() : ''
+  const deviceNumber = typeof body.deviceNumber === 'string' ? body.deviceNumber.trim() : ''
+  const commissionDate = typeof body.commissionDate === 'string' && body.commissionDate.trim() ? body.commissionDate.trim() : null
+  const building = buildingRows.find((b) => b.id === buildingId)
+  if (!building) return mockFail(`楼栋不存在${body.buildingId ?? ''}`)
+  const type = deviceTypeRows.find((t) => t.id === deviceTypeId)
+  if (!type) return mockFail(`设备类型不存在${body.deviceTypeId ?? ''}`)
+  if (!superName) return mockFail('箱柜名称不能为空')
+  if (!deviceNumber) return mockFail('设备编号不能为空')
+  if (cabinetRows.some((c) => c.deviceNumber === deviceNumber)) return mockFail(`设备编号已存在：${deviceNumber}`)
+  const row: CabinetConfig = {
+    id: nextId(cabinetRows),
+    buildingId,
+    buildingName: building.buildingName,
+    superName,
+    deviceNumber,
+    deviceTypeId,
+    deviceTypeName: type.name,
+    commissionDate,
+    switchingId: null,
+    switchingName: null,
+    status: 0,
+    health: 100,
+  }
+  cabinetRows.push(row)
+  // 契约 §5.16 响应 CabinetAdd：不含 status/health/switching（校验层也不接受伪造）
+  return {
+    id: row.id,
+    buildingId: row.buildingId,
+    buildingName: row.buildingName,
+    superName: row.superName,
+    deviceNumber: row.deviceNumber,
+    deviceTypeId: row.deviceTypeId,
+    deviceTypeName: row.deviceTypeName,
+    commissionDate: row.commissionDate,
+  }
+}
+
+/** §5.17 修改：六字段缺省=保留；编号换号带 warnings 警示；不触碰 status/health */
+export function updateCabinet(id: number, body: Record<string, unknown>) {
+  const hit = cabinetRows.find((c) => c.id === id)
+  if (!hit) return mockFail(`箱柜不存在${id}`)
+  const warnings: string[] = []
+  if (body.buildingId != null) {
+    const building = buildingRows.find((b) => b.id === Number(body.buildingId))
+    if (!building) return mockFail(`楼栋不存在${body.buildingId}`)
+    hit.buildingId = building.id
+    hit.buildingName = building.buildingName
+  }
+  if (body.superName != null) {
+    const name = String(body.superName).trim()
+    if (!name) return mockFail('箱柜名称不能为空')
+    hit.superName = name
+  }
+  if (body.deviceNumber != null) {
+    const deviceNumber = String(body.deviceNumber).trim()
+    if (!deviceNumber) return mockFail('设备编号不能为空')
+    if (cabinetRows.some((c) => c.id !== id && c.deviceNumber === deviceNumber)) {
+      return mockFail(`设备编号已存在：${deviceNumber}`)
+    }
+    if (hit.deviceNumber !== deviceNumber) {
+      warnings.push(`设备编号已变更，历史巡检/缺陷记录仍按原编号（${hit.deviceNumber ?? '—'}）关联，按新编号查询将不含变更前记录`)
+    }
+    hit.deviceNumber = deviceNumber
+  }
+  if (body.deviceTypeId != null) {
+    const type = deviceTypeRows.find((t) => t.id === Number(body.deviceTypeId))
+    if (!type) return mockFail(`设备类型不存在${body.deviceTypeId}`)
+    hit.deviceTypeId = type.id
+    hit.deviceTypeName = type.name
+  }
+  if (body.commissionDate != null) {
+    hit.commissionDate = String(body.commissionDate).trim() || null
+  }
+  if (body.switchingId != null) {
+    const switching = switchingRows.find((s) => s.id === Number(body.switchingId))
+    if (!switching) return mockFail(`配电房不存在${body.switchingId}`)
+    hit.switchingId = switching.id
+    hit.switchingName = switching.switchingName
+  }
+  return { ...clone(hit), warnings }
+}
+
+/** §5.18 删除：箱柜下仍有关联测点设备（板块内按 superName 关联）→ code=0 列出数量 */
+export function deleteCabinet(id: number) {
+  const hit = cabinetRows.find((c) => c.id === id)
+  if (!hit) return mockFail(`箱柜不存在${id}`)
+  const refCount = deviceRows.filter((d) => d.superName === hit.superName).length
+  if (refCount > 0) return mockFail(`该箱柜下仍有 ${refCount} 台测点设备，不可删除`)
+  cabinetRows.splice(cabinetRows.indexOf(hit), 1)
+  return true
+}
+
+/* ================= §7.1-7.4 健康度评估链路（批次 2） =================
+ * 模板按设备类型名称精确匹配；autoPreview 按投运年限/设计寿命比率预计算；
+ * 提交计算 HI 并同事务回写箱柜 health + 落历史（种子评估也走同一计算路径，数值自洽）。
+ * 约定：模块内校验失败抛 Error(用户文案)，导出函数统一 catch 转成 mockFail 返回
+ * （mockAdapter 只认返回值里的 mockFail 标记，throw 会丢文案）。 */
+
+/** 评估历史存储行（契约字段 + 内部快照字段） */
+interface AssessmentStoreRow {
+  record: HealthAssessmentRecord
+  /** 提交时设备类型快照（7.3 按类型筛选用） */
+  deviceTypeId: number
+  dimensions: HealthAssessmentDetail['dimensions']
+  items: HealthAssessmentDetail['items']
+}
+
+const assessmentRows: AssessmentStoreRow[] = []
+const GRADE_DEDUCTION: Record<HealthGrade, number> = { 正常: 0, 注意: 20, 异常: 50, 严重: 100 }
+const GRADES: HealthGrade[] = ['正常', '注意', '异常', '严重']
+/** §7.6.4 自动评分项固定编码（与 views/composables/templateTree 的 AUTO_ITEM_CODE 同源约定） */
+const AUTO_ITEM_CODE = 'dim6_service_life'
+
+function formatNow(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function mockAssessor(): { id: string; name: string } {
+  try {
+    const raw = localStorage.getItem('bz_auth_user')
+    const user = raw ? (JSON.parse(raw) as { id?: number; name?: string; account?: string }) : null
+    return { id: user?.id != null ? String(user.id) : '0', name: user?.name || user?.account || '评估人' }
+  } catch {
+    return { id: '0', name: '评估人' }
+  }
+}
+
+function healthLevelOf(value: number): string {
+  return value >= 85 ? '优秀' : value >= 70 ? '良好' : value >= 50 ? '一般' : value >= 30 ? '较差' : '极差'
+}
+
+/** 按箱柜类型精确匹配模板；空壳模板按契约防御口径报「至少需要配置 1 个维度」 */
+function findTemplateForCabinet(cabinet: CabinetConfig): HealthTemplateTree | null {
+  const template = healthTemplateRows.find((t) => t.typeName === cabinet.deviceTypeName) ?? null
+  if (template && !template.dimensions.length) {
+    throw new Error('模板配置数据异常：至少需要配置 1 个维度')
+  }
+  return template
+}
+
+function yearsUsedSince(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const then = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(then.getTime())) return null
+  return (Date.now() - then.getTime()) / (365.25 * 24 * 3600 * 1000)
+}
+
+/** §7.1 运行年限自动项预计算（比率 <50% 正常 / <80% 注意 / <100% 异常 / ≥100% 严重）；无自动项返回 null */
+function computeAutoPreview(cabinet: CabinetConfig, template: HealthTemplateTree) {
+  const autoItem = template.dimensions
+    .flatMap((d) => d.items)
+    .find((item) => item.autoCalculated)
+  if (!autoItem) return null
+  const years = yearsUsedSince(cabinet.commissionDate)
+  let grade: HealthGrade = '正常'
+  let autoDetail: string
+  if (years == null) {
+    autoDetail = '投运日期未维护，自动项按正常评定'
+  } else {
+    const ratio = years / template.designLifeYears
+    grade = ratio < 0.5 ? '正常' : ratio < 0.8 ? '注意' : ratio < 1 ? '异常' : '严重'
+    autoDetail = `投运 ${cabinet.commissionDate}，已使用 ${years.toFixed(1)} 年 / 设计寿命 ${template.designLifeYears} 年 = ${(ratio * 100).toFixed(1)}%，评定：${grade}`
+  }
+  return { itemCode: autoItem.code, itemName: autoItem.name, grade, autoDetail }
+}
+
+function stripTemplateTree(template: HealthTemplateTree) {
+  return template.dimensions.map((d) => ({
+    no: d.no,
+    name: d.name,
+    weightPercent: d.weightPercent,
+    items: d.items.map((i) => ({
+      code: i.code,
+      name: i.name,
+      subWeight: i.subWeight,
+      normal: i.normal,
+      attention: i.attention,
+      abnormal: i.abnormal,
+      severe: i.severe,
+      autoCalculated: i.autoCalculated,
+    })),
+  }))
+}
+
+/** §7.1 按箱柜查询评估模板（类型不支持/箱柜不存在 → code=0 文案） */
+export function getAssessmentTemplate(cabinetId: number): HealthAssessTemplate | ReturnType<typeof mockFail> {
+  try {
+    const cabinet = cabinetRows.find((c) => c.id === cabinetId)
+    if (!cabinet) return mockFail(`箱柜不存在${cabinetId}`)
+    const template = findTemplateForCabinet(cabinet)
+    if (!template) return mockFail(`设备类型「${cabinet.deviceTypeName ?? '未知'}」未配置评估模板`)
+    const autoPreview = computeAutoPreview(cabinet, template)
+    if (!autoPreview) return mockFail('模板缺少自动评分项，无法评估')
+    return {
+      cabinetId: cabinet.id,
+      cabinetName: cabinet.superName,
+      cabinetNumber: cabinet.deviceNumber ?? '',
+      deviceTypeName: cabinet.deviceTypeName ?? '',
+      templateCode: template.code,
+      templateName: template.typeName,
+      dimensions: stripTemplateTree(template),
+      autoPreview,
+    }
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '评估模板查询失败')
+  }
+}
+
+/**
+ * 评估核心：校验 + 计算 + 回写 + 落历史（正式提交与种子记录共用此路径）。
+ * 手工项必须恰好覆盖模板全部手工项；自动项不可提交；等级白名单。失败抛 Error。
+ */
+function runAssessment(
+  cabinet: CabinetConfig,
+  template: HealthTemplateTree,
+  submitted: { code?: unknown; grade?: unknown }[],
+  remark: string | null,
+  meta: { id: number; createdAt: string; assessorId: string; assessorName: string },
+): AssessmentStoreRow {
+  const autoPreview = computeAutoPreview(cabinet, template)
+  if (!autoPreview) throw new Error('模板缺少自动评分项，无法评估')
+  const seen = new Set<string>()
+  const gradeByCode = new Map<string, HealthGrade>()
+  for (const item of submitted) {
+    const code = typeof item.code === 'string' ? item.code.trim() : ''
+    if (!code) throw new Error('评估项为空')
+    if (code === AUTO_ITEM_CODE) throw new Error(`评分项 ${code} 为自动计算项，无需提交`)
+    const templateItem = template.dimensions.flatMap((d) => d.items).find((i) => i.code === code)
+    if (!templateItem) throw new Error(`评分项 ${code} 不在模板内`)
+    if (seen.has(code)) throw new Error(`评分项 ${code} 重复提交`)
+    seen.add(code)
+    if (typeof item.grade !== 'string' || !GRADES.includes(item.grade as HealthGrade)) {
+      throw new Error(`评分项 ${code} 的评定等级非法`)
+    }
+    gradeByCode.set(code, item.grade as HealthGrade)
+  }
+  for (const dimension of template.dimensions) {
+    for (const item of dimension.items) {
+      if (item.autoCalculated) continue
+      if (!gradeByCode.has(item.code)) throw new Error(`缺少评分项 ${item.code} 的评定`)
+    }
+  }
+
+  // 计算：维度得分 = Σ(子权重×扣分)；HI = 100 − Σ(维度权重%×维度得分)；healthValue 取整
+  const dimensionsResult: HealthAssessmentDetail['dimensions'] = []
+  const itemsResult: HealthAssessmentDetail['items'] = []
+  let deductionSum = 0
+  let itemId = meta.id * 100
+  for (const dimension of [...template.dimensions].sort((a, b) => a.no - b.no)) {
+    let dimensionScore = 0
+    for (const item of dimension.items) {
+      const auto = item.autoCalculated
+      const grade = auto ? autoPreview.grade : gradeByCode.get(item.code)!
+      const deduction = GRADE_DEDUCTION[grade]
+      dimensionScore += item.subWeight * deduction
+      itemId += 1
+      itemsResult.push({
+        id: itemId,
+        assessmentId: meta.id,
+        itemCode: item.code,
+        itemName: item.name,
+        dimensionNo: dimension.no,
+        subWeight: item.subWeight,
+        grade,
+        deduction,
+        autoCalculated: auto,
+        autoDetail: auto ? autoPreview.autoDetail : null,
+      })
+    }
+    dimensionsResult.push({
+      no: dimension.no,
+      name: dimension.name,
+      weightPercent: dimension.weightPercent,
+      score: Number(dimensionScore.toFixed(1)),
+    })
+    deductionSum += (dimension.weightPercent / 100) * dimensionScore
+  }
+  const hiScore = Number((100 - deductionSum).toFixed(1))
+  const healthValue = Math.round(hiScore)
+
+  // 提交即生效：同事务回写箱柜 health（契约 §7.2）+ 落历史
+  cabinet.health = healthValue
+  const record: HealthAssessmentRecord = {
+    id: meta.id,
+    cabinetId: cabinet.id,
+    cabinetName: cabinet.superName,
+    cabinetNumber: cabinet.deviceNumber ?? '',
+    templateCode: template.code,
+    deviceTypeName: cabinet.deviceTypeName ?? '',
+    hiScore,
+    healthValue,
+    assessorId: meta.assessorId,
+    assessorName: meta.assessorName,
+    remark,
+    createdAt: meta.createdAt,
+  }
+  const row: AssessmentStoreRow = {
+    record,
+    deviceTypeId: cabinet.deviceTypeId ?? 0,
+    dimensions: dimensionsResult,
+    items: itemsResult,
+  }
+  assessmentRows.push(row)
+  return row
+}
+
+/** §7.2 提交评估 */
+export function submitAssessment(body: Record<string, unknown>): HealthAssessmentResult | ReturnType<typeof mockFail> {
+  try {
+    const cabinetId = Number(body.cabinetId)
+    const cabinet = cabinetRows.find((c) => c.id === cabinetId)
+    if (!cabinet) return mockFail(`箱柜不存在${body.cabinetId ?? ''}`)
+    const template = findTemplateForCabinet(cabinet)
+    if (!template) return mockFail(`设备类型「${cabinet.deviceTypeName ?? '未知'}」未配置评估模板`)
+    const submitted = Array.isArray(body.items) ? (body.items as { code?: unknown; grade?: unknown }[]) : []
+    const remark = typeof body.remark === 'string' && body.remark.trim() ? body.remark.trim() : null
+    const assessor = mockAssessor()
+    const nextId = assessmentRows.reduce((max, r) => Math.max(max, r.record.id), 0) + 1
+    const { record, dimensions, items } = runAssessment(cabinet, template, submitted, remark, {
+      id: nextId,
+      createdAt: formatNow(),
+      assessorId: assessor.id,
+      assessorName: assessor.name,
+    })
+    return {
+      assessmentId: record.id,
+      cabinetId: record.cabinetId,
+      cabinetName: record.cabinetName,
+      dimensions: dimensions.map(({ no, name, weightPercent, score }) => ({ no, name, weightPercent, score })),
+      items: items.map(({ itemCode, itemName, dimensionNo, grade, deduction, autoCalculated, autoDetail }) => ({
+        code: itemCode,
+        itemName,
+        dimensionNo,
+        grade,
+        deduction,
+        autoCalculated,
+        autoDetail,
+      })),
+      hiScore: record.hiScore,
+      // runAssessment 写入的必为数字（7.3 契约的 null 容忍仅针对 join 缺失场景）
+      healthValue: record.healthValue!,
+      healthLevel: healthLevelOf(record.healthValue!),
+    }
+  } catch (e) {
+    return mockFail(e instanceof Error ? e.message : '评估提交失败')
+  }
+}
+
+/** §7.3 评估历史分页（评估时间倒序；cabinetId/deviceTypeId 可叠加筛选） */
+export function fetchAssessmentRecords(query: Record<string, string>): { total: number; rows: HealthAssessmentRecord[] } {
+  const cabinetId = query.cabinetId ? Number(query.cabinetId) : null
+  const deviceTypeId = query.deviceTypeId ? Number(query.deviceTypeId) : null
+  const page = query.page ? Number(query.page) : 1
+  const pageSize = query.pageSize ? Number(query.pageSize) : 12
+  const filtered = [...assessmentRows]
+    .filter((row) => (cabinetId == null || row.record.cabinetId === cabinetId)
+      && (deviceTypeId == null || row.deviceTypeId === deviceTypeId))
+    .sort((a, b) => b.record.createdAt.localeCompare(a.record.createdAt))
+  const start = (page - 1) * pageSize
+  return { total: filtered.length, rows: filtered.slice(start, start + pageSize).map((row) => clone(row.record)) }
+}
+
+/** §7.4 评估详情（提交时整表快照，可完整重放） */
+export function fetchAssessmentDetail(id: number): HealthAssessmentDetail | ReturnType<typeof mockFail> {
+  const row = assessmentRows.find((r) => r.record.id === id)
+  if (!row) return mockFail(`评估记录不存在${id}`)
+  return { assessment: clone(row.record), dimensions: clone(row.dimensions), items: clone(row.items) }
+}
+
+// ---- 种子评估历史（走 runAssessment 同一计算路径；提交即回写箱柜 health，种子自洽） ----
+function seedAssessment(id: number, cabinetId: number, grades: Record<string, string>, remark: string | null, createdAt: string) {
+  const cabinet = cabinetRows.find((c) => c.id === cabinetId)
+  const template = cabinet ? findTemplateForCabinet(cabinet) : null
+  if (!cabinet || !template) return
+  runAssessment(cabinet, template, Object.entries(grades).map(([code, grade]) => ({ code, grade })), remark, {
+    id,
+    createdAt,
+    assessorId: '1',
+    assessorName: '宝安运维员',
+  })
+}
+// 箱柜 2（1#变 1AA4馈线柜）：柜温异常档 → HI 88.0
+seedAssessment(1, 2, { dim1_rust: '正常', dim1_label: '正常', dim2_temp: '异常', dim2_noise: '正常' }, '季度评估', '2026-11-20 10:15:00')
+// 箱柜 6（2#变 2AA2馈线柜）：锈蚀严重档 → HI 62.3
+seedAssessment(2, 6, { dim1_rust: '严重', dim1_label: '异常', dim2_temp: '异常', dim2_noise: '注意' }, null, '2026-11-22 16:40:00')

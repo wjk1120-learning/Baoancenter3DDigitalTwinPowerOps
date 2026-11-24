@@ -42,6 +42,14 @@ import {
   deleteBuilding,
   deleteDeviceType,
   deleteSwitching,
+  changeDevice,
+  addCabinet,
+  updateCabinet,
+  deleteCabinet,
+  getAssessmentTemplate,
+  submitAssessment,
+  fetchAssessmentRecords,
+  fetchAssessmentDetail,
 } from './data/configuration'
 import type { DeviceFilter } from '../api/configuration/inventory'
 import {
@@ -320,6 +328,18 @@ const routes: MockRoute[] = [
   route('GET /configuration/cabinets/fuzzy-search', ({ query }) =>
     searchCabinets(query.keyword ?? ''),
   ),
+  // §5.14 修改设备（superId=0 解绑/>0 换绑；locationNumbers 全量；enabled 缺省不改）
+  route('POST /configuration/devices/:deviceId', ({ params, body }) =>
+    changeDevice(Number(params.deviceId), asBody(body)),
+  ),
+  // §5.16/§5.17/§5.18 箱柜建档/修改/删除（编号全局唯一；换号 warnings；删前须无关联设备）
+  route('POST /configuration/cabinets', ({ body }) => addCabinet(asBody(body))),
+  route('POST /configuration/cabinets/:id/update', ({ params, body }) =>
+    updateCabinet(Number(params.id), asBody(body)),
+  ),
+  route('POST /configuration/cabinets/:id/delete', ({ params }) =>
+    deleteCabinet(Number(params.id)),
+  ),
   // §5.24/§5.29 楼栋/楼层能耗统计（只读，写随批次 4；buildingId 空串=全量）
   route('GET /configuration/building-stats', ({ query }) =>
     getBuildingStats(query.buildingId === '' || query.buildingId == null ? undefined : Number(query.buildingId)),
@@ -330,6 +350,15 @@ const routes: MockRoute[] = [
   // §7.6.1/§7.6.2 健康度模板列表与整树（只读，写随批次 3）
   route('GET /health/templates', () => getHealthTemplateList()),
   route('GET /health/templates/:id', ({ params }) => getHealthTemplateTree(Number(params.id))),
+
+  // ── 健康度评估链路（§7.1-7.4，批次 2）──
+  // ⚠ :id 参数路由与字面路由同为 3 段，template 必须登记在 :id 之前（匹配器按顺序）
+  route('GET /health/assessments/template', ({ query }) =>
+    getAssessmentTemplate(Number(query.cabinetId)),
+  ),
+  route('POST /health/assessments', ({ body }) => submitAssessment(asBody(body))),
+  route('GET /health/assessments', ({ query }) => fetchAssessmentRecords(query)),
+  route('GET /health/assessments/:id', ({ params }) => fetchAssessmentDetail(Number(params.id))),
 ]
 
 /** 纯函数匹配（带单测 mockAdapter.spec.ts）：方法一致 + 段数一致 + 字面段相等/:参数捕获 */

@@ -1,34 +1,45 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
-import { NAlert, NButton, NForm, NFormItem, NInput, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
-import { changeDevice, getDevices, searchCabinets, type DeviceConfig, type DeviceFilter } from '../../../api/configuration/inventory'
+import { NAlert, NButton, NForm, NFormItem, NInput, NRadioButton, NRadioGroup } from 'naive-ui'
+import {
+  changeDevice,
+  getDevices,
+  searchCabinets,
+  type DeviceConfig,
+  type DeviceFilter,
+} from '../../../api/configuration/inventory'
 import { clearEventCache } from '../../../api/event/event'
 import ConfigActionButton from './ConfigActionButton.vue'
 import ConfigFilterButtons from './ConfigFilterButtons.vue'
 import ConfigTable from './ConfigTable.vue'
 import ConfigDialog from './ConfigDialog.vue'
-import { configError, invalidateCabinetData, useConfigList, useConfigMutation } from '../composables/useConfiguration'
+import {
+  configError,
+  invalidateCabinetData,
+  useConfigList,
+  useConfigMutation,
+} from '../composables/useConfiguration'
 
 const filters: { label: string; value: DeviceFilter }[] = [
   { label: '全部设备', value: '' },
   { label: '未绑定箱柜', value: 'unbound' },
   { label: '未配置管理编号', value: 'no-location' },
 ]
-const bindings = [
-  { label: '保留当前绑定', value: 'keep' },
-  { label: '绑定或更换箱柜', value: 'bind' },
-  { label: '解绑箱柜', value: 'unbind' },
-]
 const filter = ref<DeviceFilter>('')
 const { rows, loading, error: listError, reload } = useConfigList(() => getDevices(filter.value))
 const { saving, error, warnings, writable, submit } = useConfigMutation(reload)
 const selected = ref<DeviceConfig | null>(null)
 const enabledDraft = ref<number | null>(null)
-const binding = ref<'keep' | 'bind' | 'unbind'>('keep')
+/** 所属箱柜（宝安 2026-11-24 用户拍板，替代福永三态绑定选择）：
+ * 输入框默认显示当前箱柜名，输入即 §5.19 模糊检索；协议——选定传箱柜 id、
+ * 清空传 0（解绑）、与原名一致/未动不传（缺省=不修改）。 */
+const originalCabinetName = ref('')
 const cabinetId = ref<number | null>(null)
 const keyword = ref('')
 const cabinetOptions = ref<{ label: string; value: number; name: string }[]>([])
-/** 管理编号行式编辑（2026-11-19 用户口径）：一行一框 + 编辑/移除，＋加行，滚动区最多露三行 */
+/** 管理编号行式编辑：一行一框（直接改）+ 移除，＋加行（新行自动聚焦），滚动区最多露三行。
+ * 宝安适配（2026-11-24 用户拍板，偏离福永）：去掉行内「编辑」按钮——它只做聚焦，
+ * 输入框本就随时可编辑，按钮纯属冗余。 */
 const locationRows = ref<string[]>([])
 const rowInputs = ref<{ focus: () => void }[]>([])
 
@@ -41,9 +52,6 @@ function removeLocationRow(index: number) {
   locationRows.value.splice(index, 1)
 }
 
-function focusLocationRow(index: number) {
-  rowInputs.value[index]?.focus()
-}
 const searching = ref(false)
 const searchError = ref('')
 let searchVersion = 0
@@ -58,9 +66,10 @@ let comboDebounce: number | null = null
 function open(row: DeviceConfig) {
   selected.value = row
   enabledDraft.value = row.enabled
-  binding.value = 'keep'
+  originalCabinetName.value = row.superName ?? ''
   cabinetId.value = null
-  keyword.value = ''
+  keyword.value = originalCabinetName.value
+  pickedName.value = keyword.value
   locationRows.value = [...row.locationNumbers]
   cabinetOptions.value = []
   searching.value = false
@@ -68,7 +77,6 @@ function open(row: DeviceConfig) {
   error.value = ''
   comboOpen.value = false
   activeIndex.value = 0
-  pickedName.value = ''
 }
 
 function close() {
@@ -89,7 +97,8 @@ async function findCabinets() {
     const result = await searchCabinets(query)
     if (request !== searchVersion) return
     cabinetOptions.value = result.map((cabinet) => ({
-      label: `${cabinet.superName}（#${cabinet.id}）`,
+      // 宝安适配（2026-11-24 用户拍板）：选项只显示箱柜名称，不带 #id 后缀（提交仍用 id）
+      label: cabinet.superName,
       value: cabinet.id,
       name: cabinet.superName,
     }))
@@ -108,7 +117,7 @@ async function findCabinets() {
 }
 
 watch(keyword, () => {
-  if (keyword.value.trim() === pickedName.value && cabinetId.value != null) return
+  if (keyword.value.trim() === pickedName.value) return
   pickedName.value = ''
   if (comboDebounce !== null) clearTimeout(comboDebounce)
   const query = keyword.value.trim()
@@ -142,7 +151,9 @@ function onKeywordFocus() {
 
 function scrollActiveIntoView() {
   void nextTick(() => {
-    menuEl.value?.querySelector('.cabinet-combo__option.is-active')?.scrollIntoView({ block: 'nearest' })
+    menuEl.value
+      ?.querySelector('.cabinet-combo__option.is-active')
+      ?.scrollIntoView({ block: 'nearest' })
   })
 }
 
@@ -177,13 +188,23 @@ function locationSet(values: string[]) {
 async function save() {
   const row = selected.value
   if (!row) return
-  if (binding.value === 'bind' && cabinetId.value == null) {
-    error.value = '请输入关键字并从下拉中选择箱柜'
+  /* 所属箱柜协议（§5.14 superId 缺省=不修改）：清空=解绑(0，原已无绑定时同为缺省)；
+   * 与原名一致=不修改（缺省）；输入了新名 → 必须从下拉选定（拿到 id 才能提交） */
+  const kw = keyword.value.trim()
+  let superId: number | undefined
+  if (!kw) {
+    superId = originalCabinetName.value ? 0 : undefined
+  } else if (kw === originalCabinetName.value) {
+    superId = undefined
+  } else if (cabinetId.value != null) {
+    superId = cabinetId.value
+  } else {
+    error.value = '请输入关键字并从下拉中选择箱柜，或清空以解绑'
     return
   }
   const numbers = locationSet(locationRows.value)
-  const locationsChanged = JSON.stringify(numbers) !== JSON.stringify(locationSet(row.locationNumbers))
-  const superId = binding.value === 'unbind' ? 0 : binding.value === 'bind' ? cabinetId.value ?? undefined : undefined
+  const locationsChanged =
+    JSON.stringify(numbers) !== JSON.stringify(locationSet(row.locationNumbers))
   /* §5.14 enabled：仅与当前值不同时提交（0=停用/1=启用，缺省=不修改） */
   const enabledChanged =
     (enabledDraft.value === 0 || enabledDraft.value === 1) && enabledDraft.value !== row.enabled
@@ -191,20 +212,26 @@ async function save() {
     close()
     return
   }
-  if (await submit(async () => {
-    const result = await changeDevice(row.deviceId, {
-      superId,
-      locationNumbers: locationsChanged ? numbers : undefined,
-      enabled: enabledChanged ? enabledDraft.value ?? undefined : undefined,
+  if (
+    await submit(async () => {
+      const result = await changeDevice(row.deviceId, {
+        superId,
+        locationNumbers: locationsChanged ? numbers : undefined,
+        enabled: enabledChanged ? (enabledDraft.value ?? undefined) : undefined,
+      })
+      warnings.value = result.warnings ?? []
+      selected.value = result
+      enabledDraft.value = result.enabled
+      locationRows.value = [...result.locationNumbers]
+      originalCabinetName.value = result.superName ?? ''
+      keyword.value = originalCabinetName.value
+      pickedName.value = keyword.value
+      cabinetId.value = null
+      if (superId != null) invalidateCabinetData()
+      if (locationsChanged) clearEventCache()
     })
-    warnings.value = result.warnings ?? []
-    selected.value = result
-    enabledDraft.value = result.enabled
-    locationRows.value = [...result.locationNumbers]
-    binding.value = 'keep'
-    if (superId != null) invalidateCabinetData()
-    if (locationsChanged) clearEventCache()
-  })) close()
+  )
+    close()
 }
 
 watch(filter, reload, { immediate: true })
@@ -214,7 +241,12 @@ watch(filter, reload, { immediate: true })
   <div>
     <div class="config-toolbar">
       <div class="config-toolbar__filters">
-        <ConfigFilterButtons :options="filters" :value="filter" label="设备筛选" @change="filter = $event" />
+        <ConfigFilterButtons
+          :options="filters"
+          :value="filter"
+          label="设备筛选"
+          @change="filter = $event"
+        />
       </div>
     </div>
     <NAlert v-if="warnings.length" class="config-notice" type="warning">
@@ -222,26 +254,37 @@ watch(filter, reload, { immediate: true })
     </NAlert>
     <ConfigTable
       title="设备列表"
-:headers="['设备 ID', '设备名称', '通道 ID', '状态', '所属箱柜', '管理编号']"
-      :rows="rows" :row-key="(row) => row.deviceId"
-      :cells="(row) => [row.deviceId, row.deviceName, row.channelId, row.enabled === 1 ? '启用' : row.enabled === 0 ? '停用' : '—', row.superName, row.locationNumbers.join('、') || null]"
-      :loading="loading" :error="listError" :actions="writable" @reload="reload">
+      :headers="['设备 ID', '设备名称', '通道 ID', '状态', '所属箱柜', '管理编号']"
+      :rows="rows"
+      :row-key="(row) => row.deviceId"
+      :cells="
+        (row) => [
+          row.deviceId,
+          row.deviceName,
+          row.channelId,
+          row.enabled === 1 ? '启用' : row.enabled === 0 ? '停用' : '—',
+          row.superName,
+          row.locationNumbers.join('、') || null,
+        ]
+      "
+      :loading="loading"
+      :error="listError"
+      :actions="writable"
+      @reload="reload"
+    >
       <template #toolbar><NButton @click="reload">刷新</NButton></template>
-      <template #actions="{ row }"><ConfigActionButton tone="primary" @click="open(row)">编辑</ConfigActionButton></template>
+      <template #actions="{ row }"
+        ><ConfigActionButton tone="primary" @click="open(row)">编辑</ConfigActionButton></template
+      >
     </ConfigTable>
     <ConfigDialog
-:show="!!selected" title="编辑设备" :saving="saving" :error="error"
-      @close="close" @submit="save">
-      <div class="device-meta">
-        <span class="device-meta__group">
-          <span class="device-meta__label">当前箱柜</span>
-          <span class="device-meta__chip device-meta__chip--cabinet" :title="selected?.superName ?? '未绑定'">{{ selected?.superName ?? '未绑定' }}</span>
-        </span>
-        <span class="device-meta__group">
-          <span class="device-meta__label">当前状态</span>
-          <span class="device-meta__chip device-meta__chip--status">{{ selected?.enabled === 1 ? '启用' : selected?.enabled === 0 ? '停用' : '—' }}</span>
-        </span>
-      </div>
+      :show="!!selected"
+      title="编辑设备"
+      :saving="saving"
+      :error="error"
+      @close="close"
+      @submit="save"
+    >
       <NForm @submit.prevent="save">
         <NFormItem label="启用状态">
           <NRadioGroup v-model:value="enabledDraft">
@@ -249,44 +292,65 @@ watch(filter, reload, { immediate: true })
             <NRadioButton :value="0">停用</NRadioButton>
           </NRadioGroup>
         </NFormItem>
-        <NFormItem label="箱柜绑定"><NSelect v-model:value="binding" :options="bindings" /></NFormItem>
-        <template v-if="binding === 'bind'">
-          <NFormItem label="按箱柜名称搜索" required>
-            <div class="cabinet-combo" @keydown="onComboKeydown">
-              <NInput
-                v-model:value="keyword" placeholder="输入箱柜名称关键字"
-                @focus="onKeywordFocus" @blur="comboOpen = false"
-              />
-              <div v-if="comboOpen" ref="menuEl" class="cabinet-combo__menu">
-                <div v-if="searching" class="cabinet-combo__hint">搜索中…</div>
-                <template v-else-if="cabinetOptions.length">
-                  <button
-                    v-for="(option, index) in cabinetOptions" :key="option.value" type="button"
-                    class="cabinet-combo__option" :class="{ 'is-active': index === activeIndex }"
-                    :title="option.label" @mousedown.prevent @click="pickCabinet(index)"
-                  >
-                    {{ option.label }}
-                  </button>
-                </template>
-                <div v-else class="cabinet-combo__hint">{{ searchError || '未找到匹配箱柜' }}</div>
-              </div>
+        <!-- 宝安适配（2026-11-24 用户拍板）：三态绑定选择改为「所属箱柜」单输入框——
+             默认显示当前箱柜，输入即 §5.19 模糊检索；选定传 id、清空传 0（解绑）、未动不传 -->
+        <NFormItem label="所属箱柜">
+          <div class="cabinet-combo" @keydown="onComboKeydown">
+            <NInput
+              v-model:value="keyword"
+              placeholder="留空 = 解绑；输入关键字可更换箱柜"
+              @focus="onKeywordFocus"
+              @blur="comboOpen = false"
+            />
+            <div v-if="comboOpen" ref="menuEl" class="cabinet-combo__menu">
+              <div v-if="searching" class="cabinet-combo__hint">搜索中…</div>
+              <template v-else-if="cabinetOptions.length">
+                <button
+                  v-for="(option, index) in cabinetOptions"
+                  :key="option.value"
+                  type="button"
+                  class="cabinet-combo__option"
+                  :class="{ 'is-active': index === activeIndex }"
+                  :title="option.label"
+                  @mousedown.prevent
+                  @click="pickCabinet(index)"
+                >
+                  {{ option.label }}
+                </button>
+              </template>
+              <div v-else class="cabinet-combo__hint">{{ searchError || '未找到匹配箱柜' }}</div>
             </div>
-          </NFormItem>
-        </template>
+          </div>
+        </NFormItem>
         <NFormItem label="管理编号">
           <div class="locations-field">
             <span class="locations-meta__warn">修改或删除原编号可能影响历史告警位置解析。</span>
             <div class="location-rows">
+              <!-- 宝安适配（2026-11-24 用户拍板）：＋ 不再单独占行，跟在最后一行行尾；空列表才单独显示 -->
               <div v-for="(_, i) in locationRows" :key="i" class="location-row">
                 <NInput
                   :ref="(el) => (rowInputs[i] = el as unknown as { focus: () => void })"
-                  v-model:value="locationRows[i]" placeholder="如 FY-ZY3-GF-P1#-1AA1"
+                  v-model:value="locationRows[i]"
+                  placeholder="如 FY-ZY3-GF-P1#-1AA1"
                 />
-                <button type="button" class="location-row__btn" @click="focusLocationRow(i)">编辑</button>
-                <button type="button" class="location-row__btn location-row__btn--remove" @click="removeLocationRow(i)">移除</button>
+                <button
+                  v-if="i === locationRows.length - 1"
+                  type="button"
+                  class="location-add"
+                  title="新增一行管理编号"
+                  @click="addLocationRow"
+                >
+                  ＋
+                </button>
+                <button
+                  type="button"
+                  class="location-row__btn location-row__btn--remove"
+                  @click="removeLocationRow(i)"
+                >
+                  移除
+                </button>
               </div>
             </div>
-            <button type="button" class="location-add" title="新增一行管理编号" @click="addLocationRow">＋</button>
           </div>
         </NFormItem>
       </NForm>
@@ -295,54 +359,6 @@ watch(filter, reload, { immediate: true })
 </template>
 
 <style scoped>
-/* 弹窗头部：当前箱柜（左，值=蓝底框）· 当前状态（右，值=绿底框）；标签不进框 */
-.device-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin: 2px 0 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #edf2f8;
-}
-
-.device-meta__group {
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.device-meta__label {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.device-meta__chip {
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  max-width: 420px;
-  padding: 0 12px;
-  overflow: hidden;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.device-meta__chip--cabinet {
-  color: var(--primary-700);
-  background: var(--primary-50);
-  border: 1px solid var(--primary-100);
-}
-
-.device-meta__chip--status {
-  color: #1e7b3c;
-  background: #e9f7ee;
-  border: 1px solid #bfe5cd;
-}
-
 /* 管理编号行式编辑（2026-11-19）：琥珀提示在标签下，行列表最多露三行带滚动条，左下角＋加行 */
 .locations-field {
   display: flex;
@@ -410,7 +426,7 @@ watch(filter, reload, { immediate: true })
 }
 
 .location-add {
-  align-self: flex-start;
+  flex: none;
   width: 34px;
   height: 30px;
   border: 1px dashed var(--primary-300, #7fb0e8);
@@ -425,6 +441,11 @@ watch(filter, reload, { immediate: true })
 
 .location-add:hover {
   background: var(--primary-50, #eaf3fb);
+}
+
+/* 空列表时 ＋ 单独占位；有行时它跟在最后一行行尾（见模板） */
+.locations-field > .location-add {
+  align-self: flex-start;
 }
 
 .cabinet-combo {
