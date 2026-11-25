@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { NAlert, NButton, NForm, NFormItem, NInput, NInputNumber } from 'naive-ui'
 import {
@@ -15,6 +15,7 @@ import { globalMessage } from '../../../utils/message'
 import ConfigDialog from './ConfigDialog.vue'
 import { useConfigList, useConfigMutation } from '../composables/useConfiguration'
 import { AUTO_ITEM_CODE, emptyItem, toTreeSaveBody, validateTemplateTreeDraft } from '../composables/templateTree'
+import { formatStamp, getDraft, removeDraft, setDraft } from '../composables/healthDraft'
 
 /**
  * §7.6 健康度模板配置（2026-11-17 改版：参考设计稿改页面级编辑，渐变线以下不再走列表+宽弹窗）：
@@ -22,7 +23,10 @@ import { AUTO_ITEM_CODE, emptyItem, toTreeSaveBody, validateTemplateTreeDraft } 
  * 主体 = 双列维度卡（维度名/权重% 可编辑，评分项行内编辑 + 子权重按百分数输入），
  * 「＋添加评分项」在卡片底部，「＋添加维度」是网格末尾的虚线卡；右上角 = 刷新/删除/新增/保存模板。
  * 新增仍是两步（7.6.3 建壳 → 本页配置后 7.6.5 整树保存，全量替换）；壳有变更才调 7.6.4。
- * 客户端预检 templateTree.ts 与后端五规则一致；页签切换/删除/刷新前有未保存修改会先弹确认。
+ * 客户端预检 templateTree.ts 与后端五规则一致。
+ * 守卫（2026-11-25 改版「暂存放行」）：切页签/新增/删除/刷新/切板块/离开页面前有未保存修改
+ * 一律弹「有未保存的修改」——「保存并继续」完整时先提交后端（后端拒收转本机暂存），不完整时
+ * 不发后端直接暂存本机草稿，然后照常继续导航，永不拦人；回来自动恢复草稿并出横幅（healthDraft.ts）。
  */
 const { rows, loading, error: listError, reload } = useConfigList<HealthTemplateSummary>(getHealthTemplates)
 const { saving, error, writable, submit } = useConfigMutation(reload)
@@ -36,13 +40,18 @@ const editorLife = ref<number | null>(25)
 const draft = ref<HealthTemplateDimension[]>([])
 const shellSnapshot = ref('')
 const treeSnapshot = ref('')
+/** 非空 = 当前显示的是本机草稿（存 localStorage、未提交后端），值为暂存时间 */
+const restoredAt = ref('')
 
 const activeRow = computed(() => rows.value.find((row) => row.id === activeId.value) ?? null)
 
 function shellNow(): string {
   return JSON.stringify([editorCode.value.trim(), editorTypeName.value.trim(), editorLife.value])
 }
-const dirty = computed(() => shellNow() !== shellSnapshot.value || JSON.stringify(draft.value) !== treeSnapshot.value)
+/* 无选中模板时编辑器状态是残影（如删光模板后快照未清），视为无未保存修改，避免空弹窗 */
+const dirty = computed(() =>
+  !!activeRow.value && (shellNow() !== shellSnapshot.value || JSON.stringify(draft.value) !== treeSnapshot.value),
+)
 
 const treeError = computed(() => validateTemplateTreeDraft(draft.value))
 const weightTotal = computed(() =>
@@ -62,6 +71,21 @@ function fillEditor(tree: HealthTemplateTree) {
   draft.value = cloneDimensions(tree.dimensions)
   shellSnapshot.value = shellNow()
   treeSnapshot.value = JSON.stringify(draft.value)
+  restoredAt.value = ''
+}
+
+/** 草稿恢复（守卫改版配套）：服务器整树落位后，本机有该模板草稿则覆盖显示（壳 + 全部维度/评分项）。
+ * 基线同步为草稿内容（dirty=false）→ 再切走不重复弹窗；「保存模板」按钮靠 restoredAt 保持可点。 */
+function restoreLocalDraft(id: number) {
+  const local = getDraft(id)
+  if (!local || !Array.isArray(local.dimensions) || !local.dimensions.length) return
+  editorCode.value = local.code
+  editorTypeName.value = local.typeName
+  editorLife.value = local.designLifeYears
+  draft.value = cloneDimensions(local.dimensions)
+  shellSnapshot.value = shellNow()
+  treeSnapshot.value = JSON.stringify(draft.value)
+  restoredAt.value = local.savedAt
 }
 
 async function doSelect(id: number) {
@@ -70,6 +94,7 @@ async function doSelect(id: number) {
   error.value = ''
   try {
     fillEditor(await getHealthTemplateTree(id))
+    restoreLocalDraft(id)
   } catch (e) {
     activeId.value = null
     draft.value = []
@@ -79,9 +104,23 @@ async function doSelect(id: number) {
   }
 }
 
-/* ---------- 未保存修改守卫：切模板页签/新增/删除/刷新前确认（可自动保存=保存并切换） ---------- */
+/** 横幅「放弃草稿」：清掉本地草稿并重新拉取服务器整树（草稿已清，不会再次恢复） */
+async function discardDraft() {
+  const id = activeId.value
+  if (!id) return
+  removeDraft(id)
+  restoredAt.value = ''
+  await doSelect(id)
+}
+
+/* ---------- 未保存修改守卫（2026-11-25 改版「暂存放行」）----------
+ * 切模板页签/新增/删除/刷新/切板块/离开页面前有未保存修改，一律弹同一个「有未保存的修改」弹窗。
+ * 「保存并继续」：完整 → 先提交后端（成功清草稿；后端拒收转本机暂存）；不完整 → 不发后端直接
+ * 暂存本机草稿。两者都照常继续导航，永不拦人；只有「取消」留在本页。
+ * 暂存后基线重置（dirty=false）→ 再切走不重复弹窗，继续改动才重新算未保存修改。 */
 const confirmOpen = ref(false)
 let pendingAction: (() => void | Promise<void>) | null = null
+let resolveGuard: ((ok: boolean) => void) | null = null
 
 function guard(action: () => void) {
   if (!dirty.value) {
@@ -92,17 +131,61 @@ function guard(action: () => void) {
   confirmOpen.value = true
 }
 
-async function confirmLeave() {
-  confirmOpen.value = false
-  const action = pendingAction
-  pendingAction = null
-  if (!action) return
-  // 模板配置完整时先自动保存（失败留在本页，错误已在红条显示）；不完整按用户选择丢弃
+/** 打开守卫弹窗并挂起导航（路由守卫 await 此 Promise）；resolve(true)=放行，false=留在本页 */
+function openGuard(): Promise<boolean> {
+  confirmOpen.value = true
+  return new Promise((resolve) => {
+    resolveGuard = resolve
+  })
+}
+
+/** 把当前编辑（壳字段 + 全部维度/评分项 + 时间戳）写为本机草稿；无选中模板时不写 */
+function writeLocalDraft(): string | null {
+  const id = activeId.value
+  if (!id) return null
+  const savedAt = new Date().toISOString()
+  setDraft(id, {
+    code: editorCode.value,
+    typeName: editorTypeName.value,
+    designLifeYears: editorLife.value,
+    dimensions: cloneDimensions(draft.value),
+    savedAt,
+  })
+  return savedAt
+}
+
+/** 守卫路径的暂存：写本地 + 基线重置 + 横幅时间 + 轻提示，然后照常放行 */
+function stashAndContinue() {
+  const savedAt = writeLocalDraft()
+  if (!savedAt) return
+  shellSnapshot.value = shellNow()
+  treeSnapshot.value = JSON.stringify(draft.value)
+  restoredAt.value = savedAt
+  globalMessage()?.success('已暂存为本机草稿')
+}
+
+/** 弹窗「保存并继续」：完整先提交后端（拒收转暂存），不完整直接暂存；均放行导航 */
+async function confirmContinue() {
   if (!treeError.value) {
     const saved = await saveTemplate()
-    if (!saved) return
+    if (!saved) stashAndContinue()
+  } else {
+    stashAndContinue()
   }
-  await action()
+  confirmOpen.value = false
+  resolveGuard?.(true)
+  resolveGuard = null
+  const action = pendingAction
+  pendingAction = null
+  await action?.()
+}
+
+/** 弹窗「取消」：留在本页（面板内动作不执行，路由守卫返回 false 拦下导航） */
+function cancelGuard() {
+  confirmOpen.value = false
+  pendingAction = null
+  resolveGuard?.(false)
+  resolveGuard = null
 }
 
 function selectTemplate(id: number) {
@@ -111,31 +194,16 @@ function selectTemplate(id: number) {
 }
 
 /* 宝安适配（2026-11-24 用户拍板，偏离福永原版）：板块内守卫只覆盖切模板页签/新增/删除/刷新，
- * 离开本板块（顶栏切页 / 左栏切板块）时未保存修改会静默丢失——两个路由守卫兜底。
- * 语义（2026-11-24 二次拍板）：「确定」= 自动保存后放行切换（不丢修改）；模板配置不完整
- * 无法自动保存时才退化为「丢弃并切换」；自动保存失败留在本板块并提示。 */
-async function leaveWithSave(): Promise<boolean> {
-  if (!dirty.value) return true
-  if (treeError.value) {
-    return window.confirm('模板配置不完整（无法自动保存），确定丢弃修改并切换吗？')
-  }
-  if (!window.confirm('有未保存的修改，确定自动保存并切换吗？')) return false
-  const saved = await saveTemplate()
-  if (!saved) {
-    globalMessage()?.error('自动保存失败，已留在本板块，请检查后重试')
-    return false
-  }
-  return true
-}
-
-// 用原生 confirm 同步弹首问；自动保存是异步的，守卫返回 Promise 挂起导航直至落定
-onBeforeRouteLeave(() => leaveWithSave())
+ * 离开本板块（顶栏切页 / 左栏切板块）时未保存修改会静默丢失——两个路由守卫兜底，同一弹窗。
+ * 2026-11-25 二次改版「暂存放行」：不再用原生 confirm、不再拦截——「保存并继续」按上方
+ * 语义保存/暂存后放行；取消才留在本板块。 */
+onBeforeRouteLeave(() => (dirty.value ? openGuard() : true))
 
 // 缺口补全：左栏切板块是同路由仅 query 变化（leave 守卫不触发），但 v-if 链会立刻
 // 卸载本面板丢弃修改——用 update 守卫补位；留在本板块（query 回 health-templates）不拦
 onBeforeRouteUpdate((to) => {
   if (to.query.board === 'health-templates') return true
-  return leaveWithSave()
+  return dirty.value ? openGuard() : true
 })
 
 async function retryList() {
@@ -228,6 +296,11 @@ async function saveInfo() {
         editorTypeName.value = shell.typeName
         editorLife.value = shell.designLifeYears
         shellSnapshot.value = shellNow()
+        // 本机草稿若存在，同步壳字段（守卫改版配套）：避免恢复草稿时旧壳值把新保存的基本信息覆盖回去
+        const local = getDraft(id)
+        if (local) {
+          setDraft(id, { ...local, code: shell.code, typeName: shell.typeName, designLifeYears: shell.designLifeYears })
+        }
       },
       true,
       '模板基本信息已保存',
@@ -262,6 +335,9 @@ async function saveTemplate(): Promise<boolean> {
       draft.value = cloneDimensions(saved.dimensions)
       shellSnapshot.value = shellNow()
       treeSnapshot.value = JSON.stringify(draft.value)
+      // 正式保存成功：清掉对应本机草稿（守卫改版配套）
+      removeDraft(id)
+      restoredAt.value = ''
     },
     true,
     '模板已保存（全量替换维度与评分项，保存即生效）',
@@ -338,19 +414,33 @@ async function confirmDelete() {
   if (!row) return
   if (await submit(() => deleteHealthTemplate(row.id))) {
     deleteOpen.value = false
+    // 删除模板：清掉对应本机草稿（守卫改版配套）
+    removeDraft(row.id)
     if (activeId.value === row.id) {
       activeId.value = null
       draft.value = []
+      restoredAt.value = ''
       const first = rows.value[0]
       if (first) await doSelect(first.id)
     }
   }
 }
 
+/* 刷新/关闭页面：路由守卫不触发，脏状态静默写本机草稿（无弹窗、不注册 beforeunload 故无原生框），
+ * 刷新或重开浏览器后由 doSelect → restoreLocalDraft 自动恢复 */
+function stashOnPageHide() {
+  if (dirty.value) writeLocalDraft()
+}
+
 onMounted(async () => {
+  window.addEventListener('pagehide', stashOnPageHide)
   await reload()
   const first = rows.value[0]
   if (first) await doSelect(first.id)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pagehide', stashOnPageHide)
 })
 </script>
 
@@ -383,12 +473,13 @@ onMounted(async () => {
           </svg>
         </button>
       </div>
+      <!-- 按钮尺寸对齐其他板块工具条（默认 medium），2026-11-25 用户反馈 small 偏小 -->
       <div class="htp-actions">
-        <NButton size="small" :loading="loading" @click="refresh">刷新</NButton>
-        <NButton v-if="writable" size="small" :disabled="!activeRow" @click="openDelete(activeRow)">删除模板</NButton>
+        <NButton :loading="loading" @click="refresh">刷新</NButton>
+        <NButton v-if="writable" :disabled="!activeRow" @click="openDelete(activeRow)">删除模板</NButton>
         <NButton
-          v-if="writable" size="small" type="primary" :loading="saving"
-          :disabled="!activeRow || treeLoading || !dirty || !!treeError"
+          v-if="writable" type="primary" :loading="saving"
+          :disabled="!activeRow || treeLoading || (!dirty && !restoredAt) || !!treeError"
           @click="saveEditor"
         >
           保存模板
@@ -411,6 +502,12 @@ onMounted(async () => {
         维度权重合计: {{ weightTotalText }} %（{{ weightOk ? '等于 100，可保存' : '必须等于 100，不可保存' }}）
       </span>
     </div>
+
+    <!-- 本机草稿恢复横幅（守卫改版配套）：草稿未提交后端，正式保存模板后生效并清除 -->
+    <NAlert v-if="restoredAt" type="warning" class="htp-alert">
+      已恢复 {{ formatStamp(restoredAt) }} 暂存的本机草稿（未提交后端），保存模板后正式生效。
+      <NButton size="small" @click="discardDraft">放弃草稿</NButton>
+    </NAlert>
 
     <NAlert v-if="listError" type="error" class="htp-alert">
       {{ listError }}
@@ -532,18 +629,21 @@ onMounted(async () => {
       <p>评估历史靠明细快照自包含，不受影响。</p>
     </ConfigDialog>
 
-    <!-- 未保存修改守卫（宝安适配：可自动保存时确定=保存并切换，不完整才丢弃） -->
+    <!-- 未保存修改守卫（2026-11-25 改版「暂存放行」）：切页签/新增/删除/刷新/切板块/离开页面共用。
+      「保存并继续」= 完整先提交后端（拒收转暂存）/ 不完整暂存本机草稿，均放行；取消=留在本页 -->
     <ConfigDialog
       :show="confirmOpen"
-      :saving="false"
+      :saving="saving"
       :error="''"
       title="有未保存的修改"
-      :action="treeError ? '丢弃并切换' : '保存并切换'"
-      @close="confirmOpen = false"
-      @submit="confirmLeave"
+      action="保存并继续"
+      @close="cancelGuard"
+      @submit="confirmContinue"
     >
-      <p v-if="treeError">模板配置不完整（{{ treeError }}），无法自动保存，切换将丢弃这些修改。</p>
-      <p v-else>当前模板有未保存的修改，确定后将自动保存并切换。</p>
+      <p v-if="treeError">
+        当前模板有未保存的修改，点击「保存并继续」将自动暂存当前改动，重新打开本板块时自动恢复，正式保存模板后清除。
+      </p>
+      <p v-else>当前模板有未保存的修改，点击「保存并继续」将先保存到后端再继续；若后端拒收，同样自动暂存本机草稿后放行。</p>
     </ConfigDialog>
   </div>
 </template>
