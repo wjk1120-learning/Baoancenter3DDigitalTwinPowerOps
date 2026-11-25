@@ -8,7 +8,6 @@ import {
   type DeviceConfig,
   type DeviceFilter,
 } from '../../../api/configuration/inventory'
-import { clearEventCache } from '../../../api/event/event'
 import ConfigActionButton from './ConfigActionButton.vue'
 import ConfigFilterButtons from './ConfigFilterButtons.vue'
 import ConfigTable from './ConfigTable.vue'
@@ -228,7 +227,6 @@ async function save() {
       pickedName.value = keyword.value
       cabinetId.value = null
       if (superId != null) invalidateCabinetData()
-      if (locationsChanged) clearEventCache()
     })
   )
     close()

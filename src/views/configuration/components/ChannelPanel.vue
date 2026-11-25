@@ -2,7 +2,6 @@
 import { onMounted, ref } from 'vue'
 import { NAlert, NButton, NForm, NFormItem, NInput, NInputNumber, NSpace } from 'naive-ui'
 import { changeChannel, deleteChannel, getChannels, type ChannelConfig, type ChannelDeleteResult } from '../../../api/configuration/inventory'
-import { clearEventCache } from '../../../api/event/event'
 import ConfigActionButton from './ConfigActionButton.vue'
 import ConfigTable from './ConfigTable.vue'
 import ConfigDialog from './ConfigDialog.vue'
@@ -37,7 +36,6 @@ async function save() {
       refreshStatus.value = '通道已删除，后台正在刷新设备。'
       invalidateCabinetData()
       invalidateEnergyData()
-      clearEventCache()
     })) mode.value = null
     return
   }

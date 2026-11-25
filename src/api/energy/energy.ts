@@ -6,7 +6,6 @@
  */
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
 import type { RequestConfig } from '../../utils/http'
-import { MemoryCache } from '../../utils/cache'
 import type {
   DeviceDailyEnergy,
   EnergyDailyStats,
@@ -20,25 +19,12 @@ function conf(): RequestConfig {
   return { timeout: DATA_FETCH_TIMEOUT_MS, silent: true } satisfies RequestConfig
 }
 
-/**
- * §2.1 今日能耗（分楼栋；Redis 20 分钟刷新，前端定时轮询；含缓存元信息与完整度）。
- * 全院合计 = buildingStats 各楼栋求和（调用方计算）。
- * 客户端 10 秒去重缓存（2026-11-25 联调优化，用户拍板）：医院总览开页有 3 个消费方
- * （页面 3D 楼名标签 / 能源面板 KPI / 楼栋信息卡）各自调本函数，10 秒窗口内合并为一次
- * 真实请求；两类轮询均为 10 分钟一轮，远超 TTL 不受影响。失败不缓存（loader 抛错，
- * MemoryCache 只存成功值），错误仍由调用方各自的 catch 兜成 null。
- */
-const ENERGY_TODAY_TTL_MS = 10_000
-const todayCache = new MemoryCache<EnergyTodayStats>(ENERGY_TODAY_TTL_MS)
-
+/** §2.1 今日能耗（分楼栋；Redis 20 分钟刷新，前端定时轮询；含缓存元信息与完整度）。
+ *  全院合计 = buildingStats 各楼栋求和（调用方计算）。前端不缓存（2026-11-25 用户
+ *  拍板：数据新鲜度由后端 Redis 兜，前端缓存只会藏请求）。 */
 export async function fetchEnergyToday(): Promise<EnergyTodayStats | null> {
-  return todayCache.load(async () => {
-    const data = await bzGet<EnergyTodayStats | null>('/energy/today', undefined, conf())
-    if (!data || typeof data.day !== 'string' || !data.buildingStats) {
-      throw new Error('今日能耗响应形状无效')
-    }
-    return data
-  })
+  const data = await bzGet<EnergyTodayStats | null>('/energy/today', undefined, conf())
+  return data && typeof data.day === 'string' && data.buildingStats ? data : null
 }
 
 /** §2.2 昨日能耗（buildingId 不传默认 0 = 全院汇总行；昨日无数据返回空列表） */

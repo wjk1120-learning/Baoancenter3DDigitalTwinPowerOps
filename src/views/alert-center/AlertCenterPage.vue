@@ -31,17 +31,17 @@ const listGroups = ref<DeviceEventGroup[]>([])
 const statsTick = ref(0)
 const eventStats = ref<EventStatsResult | null>(null)
 
-async function loadList(force = false) {
+async function loadList() {
   loading.value = true
   page.value = 1
   try {
     if (!filterLevel.value) {
-      listGroups.value = await fetchEventGrouped(force)
+      listGroups.value = await fetchEventGrouped()
     } else {
       listGroups.value = await fetchEventGroupedByLevel(Number(filterLevel.value))
     }
     // 统计仍用全量 stats，避免等级筛选时 KPI 失真
-    eventStats.value = await fetchEventStats(force || !!filterLevel.value)
+    eventStats.value = await fetchEventStats()
   } catch {
     listGroups.value = []
   } finally {
@@ -55,7 +55,7 @@ onMounted(() => {
   window.addEventListener('keydown', onEsc)
 })
 onActivated(() => {
-  void loadList(false)
+  void loadList()
 })
 onUnmounted(() => window.removeEventListener('keydown', onEsc))
 
@@ -211,7 +211,7 @@ function onFilterLevelChange() {
           :total-pages="totalPages"
           :loading="loading"
           @update:filter-level="onFilterLevelChange"
-          @refresh="loadList(true)"
+          @refresh="loadList()"
           @open="openGroup"
           @page="page = $event"
         />
