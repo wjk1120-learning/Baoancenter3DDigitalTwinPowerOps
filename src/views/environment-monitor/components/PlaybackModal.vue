@@ -85,12 +85,13 @@ async function start() {
             <NRadio value="local">本地录像</NRadio>
             <NRadio value="cloud">云存储录像</NRadio>
           </NRadioGroup>
+          <!-- datetimerange 面板必须保留默认「确定」按钮才能提交 v-model（2026-11-25 用户
+               实测无法筛选：此前 :actions="null" 删掉了确定钮，选完起止无法确认提交） -->
           <NDatePicker
             v-model:value="range"
             type="datetimerange"
             clearable
             placeholder="选择回放起止（同一天）"
-            :actions="null"
             style="width: 380px"
           />
           <button class="pb-start" :disabled="loading" @click="start">

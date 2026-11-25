@@ -24,6 +24,8 @@ const round = ref(0)
 const cameras = ref<CameraVo[]>([])
 /** 探测中：视频墙盖加载遮罩、刷新按钮禁用 */
 const probing = ref(false)
+/** 已出画面（首帧确认）台数：加载遮罩上的「N / M 已就绪」进度（2026-11-25 用户定稿） */
+const readyCount = ref(0)
 /** 已判死的摄像头：探测中隐藏、settle 后剔除；播放在途中断流同样隐藏 */
 const brokenIds = ref<Set<number>>(new Set())
 /** 本轮已 settle（出画面或判死）的台账 id：每台只计首次，防 ok 后断流重复计数 */
@@ -41,6 +43,7 @@ async function probeAll() {
   cameras.value = []
   brokenIds.value = new Set()
   settledIds.clear()
+  readyCount.value = 0
   let ledger: CameraVo[]
   try {
     ledger = await fetchCameraList()
@@ -57,6 +60,7 @@ async function probeAll() {
 function markOk(id: number) {
   if (!probing.value || settledIds.has(id)) return
   settledIds.add(id)
+  readyCount.value += 1
   settleCheck()
 }
 
@@ -77,6 +81,9 @@ function settleCheck() {
 
 // keep-alive 激活即重探测：进页与切回页签同口径（onActivated 首次紧跟挂载，AlertCenterPage 同款）
 onActivated(() => {
+  // 预热 EZUIKit chunk（2026-11-25 加载优化）：动态 import 原本要等台账+取流走完才触发，
+  // 提前到进页瞬间与请求并行下载（模块缓存幂等，重复预热无代价），首访首帧更快
+  void import('ezuikit-js').catch(() => {})
   void probeAll()
 })
 </script>
@@ -117,7 +124,8 @@ onActivated(() => {
         <!-- 探测遮罩：盖住墙内建中的播放器，全部 settle 才撤 -->
         <div v-if="probing" class="em-probing">
           <span class="em-probing-spin" aria-hidden="true" />
-          <span class="em-probing-text">正在检测摄像头连接…</span>
+          <span class="em-probing-text">监控画面加载中...</span>
+          <span class="em-probing-sub">{{ readyCount }} / {{ cameras.length }} 已就绪</span>
         </div>
       </main>
     </div>
@@ -297,6 +305,12 @@ onActivated(() => {
   color: var(--muted);
   font-size: 14px;
   letter-spacing: 2px;
+}
+/* 进度行：「N / M 已就绪」（2026-11-25 用户定稿，参考稿样式——数字用等宽体弱化跳动） */
+.em-probing-sub {
+  color: var(--muted);
+  font-size: 13px;
+  font-family: var(--font-mono);
 }
 @keyframes em-spin {
   to {

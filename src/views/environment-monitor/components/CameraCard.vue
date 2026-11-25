@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { captureCamera, fetchCameraLiveUrl } from '../../../api/ezviz/ezviz'
 import type { CameraVo, PlayUrlVo } from '../../../api/ezviz/types'
 import { globalMessage } from '../../../utils/message'
@@ -31,6 +31,12 @@ const emit = defineEmits<{
 const playUrl = ref<PlayUrlVo | null>(null)
 const playerRef = ref<InstanceType<typeof CameraPlayer> | null>(null)
 
+/** 位置副标题：与名称相同/为空时不显示（台账常把两者填成一样，双行重复难看） */
+const locText = computed(() => {
+  const loc = (props.camera.locationDesc || '').trim()
+  return loc && loc !== props.camera.cameraName ? loc : ''
+})
+
 /** 卸载后不再上报事件：重探测整墙重建时，旧卡在途的取流响应不得污染新一轮名单 */
 let disposed = false
 onBeforeUnmount(() => {
@@ -40,6 +46,30 @@ onBeforeUnmount(() => {
 /** 抓拍：capturing 防重入；返回的托管图 URL 有时效，仅当场预览不转存 */
 const capturing = ref(false)
 const captureUrl = ref('')
+
+/** 保存抓拍图（2026-11-25 用户反馈：预览没有保存入口）：blob 下载成本地文件；
+ *  萤石托管图跨域 fetch 被拒时退化为新窗口打开（手动右键另存，链接有时效别拖） */
+async function saveCapture() {
+  if (!captureUrl.value) return
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+  const name = `抓拍_${props.camera.cameraName}_${stamp}.jpg`.replace(/[\\/:*?"<>|]/g, '_')
+  try {
+    const res = await fetch(captureUrl.value)
+    if (!res.ok) throw new Error(String(res.status))
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+    globalMessage()?.success('抓拍图片已保存')
+  } catch {
+    window.open(captureUrl.value, '_blank')
+    globalMessage()?.warning('图片跨域受限，已在新窗口打开，请右键「图片另存为」')
+  }
+}
 
 async function loadStream() {
   try {
@@ -81,10 +111,17 @@ onDeactivated(() => playerRef.value?.stop())
 <template>
   <div class="camera-card glass-card">
     <div class="cam-head">
-      <span class="cam-name" :title="camera.cameraName">{{ camera.cameraName }}</span>
-      <span class="cam-loc" :title="camera.locationDesc || ''">
-        {{ camera.locationDesc || '—' }}
-      </span>
+      <div class="cam-title">
+        <span class="cam-name" :title="camera.cameraName">{{ camera.cameraName }}</span>
+        <span v-if="locText" class="cam-loc" :title="locText">{{ locText }}</span>
+      </div>
+      <!-- 动作钮在播放器外（2026-11-25 用户拍板：与 EZUIKit 原生控件并存互不遮挡） -->
+      <div class="cam-actions">
+        <button class="cam-tool" :disabled="capturing" @click="onCapture">
+          {{ capturing ? '抓拍中…' : '抓拍' }}
+        </button>
+        <button class="cam-tool" @click="emit('playback', props.camera)">回放</button>
+      </div>
     </div>
     <div class="cam-body">
       <CameraPlayer
@@ -94,16 +131,13 @@ onDeactivated(() => playerRef.value?.stop())
         @ok="emit('ok', camera.id)"
         @error="onPlayerError"
       />
-      <div class="cam-toolbar">
-        <button class="cam-tool" :disabled="capturing" @click="onCapture">
-          {{ capturing ? '抓拍中…' : '抓拍' }}
-        </button>
-        <button class="cam-tool" @click="emit('playback', props.camera)">回放</button>
-      </div>
       <div v-if="captureUrl" class="cam-capture">
         <div class="cam-capture-head">
           <span>抓拍画面（图片有时效，请当场保存）</span>
-          <button class="cam-capture-close" @click="captureUrl = ''">关闭</button>
+          <div class="cam-capture-ops">
+            <button class="cam-capture-close" @click="saveCapture">保存</button>
+            <button class="cam-capture-close" @click="captureUrl = ''">关闭</button>
+          </div>
         </div>
         <img class="cam-capture-img" :src="captureUrl" alt="抓拍画面" />
       </div>
@@ -116,15 +150,23 @@ onDeactivated(() => playerRef.value?.stop())
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 12px 14px 14px;
+  padding: 12px 16px;
 }
 .cam-head {
   flex: none;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 10px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
   min-width: 0;
+}
+/* 名称 + 位置两行（位置与名称相同/为空时不渲染，避免台账双写造成的整行重复） */
+.cam-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .cam-name {
   font-size: 16px;
@@ -135,10 +177,7 @@ onDeactivated(() => playerRef.value?.stop())
   white-space: nowrap;
 }
 .cam-loc {
-  margin-left: auto;
-  flex: none;
-  max-width: 46%;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -150,53 +189,62 @@ onDeactivated(() => playerRef.value?.stop())
   min-height: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: #000;
+  /* 首帧前的底色：深蓝取令牌（播放中由视频画面覆盖，letterbox 与湖水蓝体系同调） */
+  background: var(--primary-800);
 }
 
-/* 悬浮工具条：hover 卡片浮现于画面右上角 */
-.cam-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 4;
+/* 动作钮：设计系统胶囊（同 ConfigActionButton 蓝系），位于头部右侧 */
+.cam-actions {
+  flex: none;
   display: flex;
-  gap: 6px;
-  opacity: 0;
-  transition: opacity 0.18s;
-}
-.camera-card:hover .cam-toolbar {
-  opacity: 1;
+  gap: 8px;
 }
 .cam-tool {
-  height: 28px;
+  height: 26px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 6px;
-  background: rgba(15, 30, 48, 0.72);
-  color: #fff;
+  border: 1px solid var(--primary-100);
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+  color: var(--primary-600);
+  font: inherit;
   font-size: 12px;
-  font-family: inherit;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: background 0.15s;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 .cam-tool:hover:not(:disabled) {
-  background: rgba(43, 124, 227, 0.85);
+  color: var(--primary-700);
+  background: var(--primary-100);
+  border-color: var(--primary-200);
+}
+.cam-tool:active:not(:disabled) {
+  color: var(--on-primary);
+  background: var(--primary-400);
+  border-color: var(--primary-400);
+}
+.cam-tool:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 .cam-tool:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+@media (prefers-reduced-motion: reduce) {
+  .cam-tool {
+    transition: none;
+  }
+}
 
-/* 抓拍预览：盖在画面上，当场看图 */
+/* 抓拍预览：盖在画面上，当场看图（实色深蓝底取自令牌，去玻璃拟态） */
 .cam-capture {
   position: absolute;
   inset: 0;
   z-index: 6;
   display: flex;
   flex-direction: column;
-  background: rgba(6, 16, 28, 0.86);
-  backdrop-filter: blur(4px);
+  background: var(--primary-800);
 }
 .cam-capture-head {
   flex: none;
@@ -205,19 +253,23 @@ onDeactivated(() => playerRef.value?.stop())
   justify-content: space-between;
   padding: 8px 12px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--on-primary);
 }
 .cam-capture-close {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: #fff;
+  color: var(--on-primary);
   font-size: 12px;
-  padding: 2px 10px;
+  padding: 2px 8px;
   cursor: pointer;
 }
+.cam-capture-ops {
+  display: flex;
+  gap: 8px;
+}
 .cam-capture-close:hover {
-  background: rgba(43, 124, 227, 0.6);
+  background: var(--primary-600);
 }
 .cam-capture-img {
   flex: 1;
