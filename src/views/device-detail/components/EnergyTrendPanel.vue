@@ -45,6 +45,8 @@ async function loadEnergy() {
   }
 }
 
+// 设备列表变化时只重算选中项，加载统一交给下方 deviceId watch——本 watch 不再手动
+// 调 loadEnergy（2026-11-25 联调实测：赋值触发 watch + 手动调用 = daily-stats 双发）
 watch(
   () => [props.superId, props.devices] as const,
   () => {
@@ -53,7 +55,6 @@ watch(
     if (!props.devices.some((d) => d.deviceId === deviceId.value)) {
       deviceId.value = props.devices[0]?.deviceId ?? null
     }
-    void loadEnergy()
   },
   { immediate: true },
 )

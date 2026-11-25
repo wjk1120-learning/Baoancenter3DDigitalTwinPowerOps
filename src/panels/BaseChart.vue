@@ -4,6 +4,7 @@ import { BarChart, GaugeChart, LineChart, PieChart } from 'echarts/charts'
 import {
   AxisPointerComponent,
   DataZoomComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
@@ -20,6 +21,7 @@ echarts.use([
   PieChart,
   AxisPointerComponent,
   DataZoomComponent,
+  GraphicComponent,
   GridComponent,
   LegendComponent,
   TitleComponent,
