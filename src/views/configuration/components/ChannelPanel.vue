@@ -95,7 +95,6 @@ onMounted(reload)
           <NAlert type="warning">
             将删除 {{ preview.devices.length }} 台设备，清理楼栋映射 {{ preview.buildingDeviceRefs }} 条、
             楼层映射 {{ preview.floorDeviceRefs }} 条、告警位置 {{ preview.alertLocationRefs }} 条。
-            <div v-if="preview.energyCoreChannel">该通道涉及核心能耗统计。</div>
             <div v-for="warning in preview.warnings" :key="warning">{{ warning }}</div>
           </NAlert>
           <ul class="channel-preview">

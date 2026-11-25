@@ -20,7 +20,6 @@ export interface ChannelDeleteResult extends ChannelConfig {
   buildingDeviceRefs: number
   floorDeviceRefs: number
   alertLocationRefs: number
-  energyCoreChannel: boolean
   warnings: string[]
 }
 

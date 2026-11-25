@@ -7,6 +7,7 @@ import MessageBridge from './components/MessageBridge.vue'
 import { themeOverrides } from './styles/naiveTheme'
 import { usePageTabsStore } from './store/pageTabs'
 import { navConfig } from './config/navConfig'
+import { initBuildingLabels } from './config/alertLocation'
 
 const route = useRoute()
 const pageTabs = usePageTabsStore()
@@ -40,6 +41,8 @@ onMounted(() => {
   fit()
   ro = new ResizeObserver(fit)
   ro.observe(document.documentElement)
+  // 预拉后端楼栋名（告警位置展示用；后端维度表为唯一事实源，见 config/alertLocation.ts）
+  initBuildingLabels()
 })
 onBeforeUnmount(() => ro?.disconnect())
 </script>

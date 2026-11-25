@@ -82,10 +82,10 @@ export function deleteDataType(id: number): Promise<void> {
 
 /** 通用删除：building-stats 等接口契约要求 body 携带定位字段（如 buildingId），可选传入 */
 export async function deleteConfig(path: string, body?: unknown) {
-  // BUG-013：§5.36 数据类型删除成功实际返回 data:null（契约标 Boolean），记录确已删除；
-  // 其余删除仍要求后端显式确认 true。
+  // 宝中契约（2026-11-25 对齐 BZ 文档）：字典删除成功返回 data:null ——
+  // 设备类型 §5.4 / 配电房 §5.8 / 数据类型 §5.36；其余删除要求显式确认 true。
   const result = await configPost<boolean | null>(path, body)
-  if (result !== true && !(path.startsWith('/data-types/') && result === null)) {
+  if (result !== true && !(result === null && /^\/(device-types|switchings|data-types)\//.test(path))) {
     throw new Error('后端未确认删除成功')
   }
 }

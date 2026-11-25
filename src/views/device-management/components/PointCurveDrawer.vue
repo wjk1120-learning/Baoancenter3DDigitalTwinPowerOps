@@ -47,7 +47,9 @@ function unitOf(code: string): string {
 const params = ref<CetDataType[]>([])
 const dictLoading = ref(false)
 const dictError = ref(false)
-/** §1.11 实时值：measName → measVal（typeName 全等匹配；§1.11 失败时全部「暂无」，不阻塞勾选） */
+/** §1.11 实时值：measName → measVal。匹配口径（2026-11-25 联调认门）：后端测点名即
+ *  CET 英文代码（Ua/Ia/Pa…，与 §5.33 字典 typeCode 同体系）——按 typeCode 匹配，
+ *  显示仍用字典中文名 typeName（§1.11 失败时全部「暂无」，不阻塞勾选） */
 const measMap = ref<Record<string, number>>({})
 const keyword = ref('')
 const checkedCodes = ref<string[]>([])
@@ -73,7 +75,7 @@ const filteredRows = computed<Row[]>(() => {
     .map((p) => ({
       ...p,
       unit: unitOf(p.typeCode),
-      value: measMap.value[p.typeName] ?? null,
+      value: measMap.value[p.typeCode] ?? null,
       checked: checkedCodes.value.includes(p.typeCode),
     }))
 })

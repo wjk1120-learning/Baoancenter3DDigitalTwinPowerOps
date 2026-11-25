@@ -61,10 +61,11 @@ watch(
     alarmTrend.value = []
     if (floor) {
       // 楼层模式：§2.7 今日 + §2.6 昨日 + §3.7?floor + §2.8 能耗趋势 + §3.8?floor 告警趋势
+      // 告警数失败置 null（显示「—」）：失败≠没有告警，不拿 0 冒充真实值（2026-11-25 联调口径）
       const [today, yest, cnt, hist, alarms] = await Promise.all([
         fetchFloorEnergyToday(id, floor).catch(() => null),
         fetchFloorEnergyYesterday(id, floor).catch(() => null),
-        fetchBuildingCurrentAlarmCount(id, floor).catch(() => 0),
+        fetchBuildingCurrentAlarmCount(id, floor).catch(() => null),
         fetchFloorEnergyHistory(id, floor).catch(() => []),
         fetchBuildingDailyAlarms(id, floor).catch(() => []),
       ])
@@ -82,7 +83,7 @@ watch(
       const [today, yest, cnt, hist, alarms] = await Promise.all([
         fetchEnergyToday().catch(() => null),
         fetchEnergyYesterday(id).catch(() => []),
-        fetchBuildingCurrentAlarmCount(id).catch(() => 0),
+        fetchBuildingCurrentAlarmCount(id).catch(() => null),
         fetchBuildingEnergyHistory(id).catch(() => []),
         fetchBuildingDailyAlarms(id).catch(() => []),
       ])

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NSelect } from 'naive-ui'
 import { usePageTabsStore } from '../../store/pageTabs'
 import {
+  exportDeviceExcel,
   fetchDeviceSearch,
   fetchHealthLevelStats,
   fetchSuperPage,
@@ -25,6 +26,9 @@ import CabinetTable from './components/CabinetTable.vue'
 import HealthAside from '../../components/HealthAside.vue'
 import PointListDialog from './components/PointListDialog.vue'
 import PointCurveDrawer from './components/PointCurveDrawer.vue'
+import { globalMessage } from '../../utils/message'
+import { isInternalStaff } from '../../utils/operationsAccess'
+import { readAuthUser } from '../../utils/session'
 
 /**
  * 设备管理（4.2，福永 DeviceManagementPage 同构；目录解耦批次 2 起不再走全局 store）：
@@ -230,6 +234,37 @@ const emptyHint = computed(() =>
     : '',
 )
 
+// ---- 导出（§1.17，2026-11-25 联调接入）：后端全量 xlsx，AJAX blob + Authorization 下载 ----
+/** 导出进行中标记：后端生成全量 xlsx 需 1~2s，防重复点击 */
+const exporting = ref(false)
+/** §1.17 仅 level 0/1（外部人员 403）：按钮对外部人员隐藏（TopBar 同款口径） */
+const canExport = isInternalStaff(readAuthUser())
+
+/** 下载为「设备列表_本地时间戳.xlsx」（契约响应头同名，语义一致）；业务失败 toast 后端 msg */
+async function exportData() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportDeviceExcel()
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `设备列表_${stamp}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    globalMessage()?.success('设备列表导出成功')
+  } catch (e) {
+    // 200+JSON(code=0) 的业务失败走这里（HTTP 层失败已由请求拦截器 toast）
+    const msg = e instanceof Error && e.message ? e.message : '请稍后重试'
+    globalMessage()?.error(`设备列表导出失败：${msg}`)
+  } finally {
+    exporting.value = false
+  }
+}
+
 function resetSearch() {
   searchInput.value = ''
   searchKind.value = ''
@@ -322,9 +357,15 @@ function enterDevice3D(cabinet: SuperDevice) {
             <button class="dm-btn primary" type="button" @click="doSearch">搜索</button>
           </div>
           <button class="dm-btn ghost" type="button" @click="resetSearch">重置</button>
-          <!-- 导出（§1.17）：待后端联调开放（blob + Authorization AJAX 下载）；mock 不实现 -->
-          <button class="dm-btn primary" type="button" disabled title="后端联调后开放">
-            导出
+          <!-- 导出（§1.17 后端全量 xlsx，2026-11-25 联调接入；仅 level 0/1，外部人员隐藏） -->
+          <button
+            v-if="canExport"
+            class="dm-btn primary"
+            type="button"
+            :disabled="exporting"
+            @click="exportData"
+          >
+            {{ exporting ? '导出中…' : '导出' }}
           </button>
         </div>
       </header>

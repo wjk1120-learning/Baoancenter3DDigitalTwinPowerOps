@@ -18,10 +18,10 @@ export function validateConfiguration(path: string, value: unknown, write = fals
     return r[key] as unknown[]
   }
   if (write && path.endsWith('/delete') && !path.startsWith('/channels/')) {
-    // ⚠️ BUG-013（2026-11-16 实测）：§5.36 数据类型删除成功实际返回 `data:null`
-    // （契约标注 Boolean，后端未对齐）；记录确已删除。仅 data-types 放行 null，
-    // 其余删除仍须显式 true。
-    if (value !== true && !(path.startsWith('/data-types/') && value === null)) fail('删除确认')
+    // 宝中契约（BZ-Hospital-API v5.4.2，2026-11-25 对齐）：字典删除成功返回 data:null ——
+    // 设备类型 §5.4 / 配电房 §5.8 / 数据类型 §5.36；其余删除（箱柜 §5.18 / 楼栋 §5.23 /
+    // 统计映射 §5.27 / 楼层统计 §5.32）契约标 Boolean true。
+    if (value !== true && !(value === null && /^\/(device-types|switchings|data-types)\//.test(path))) fail('删除确认')
     return
   }
   const check = (value: unknown) => {
@@ -31,7 +31,8 @@ export function validateConfiguration(path: string, value: unknown, write = fals
       number(row, 'channelId'); string(row, 'channelName')
       if (write && path === '/channels' && typeof row.refreshSubmitted !== 'boolean') fail('refreshSubmitted')
       if (path.endsWith('/delete')) {
-        if (typeof row.executed !== 'boolean' || typeof row.energyCoreChannel !== 'boolean') fail('删除状态')
+        // 宝中 §5.12 预检/执行响应无 energyCoreChannel 字段（福永独有），2026-11-25 移除强校验
+        if (typeof row.executed !== 'boolean') fail('删除状态')
         for (const key of ['buildingDeviceRefs', 'floorDeviceRefs', 'alertLocationRefs']) number(row, key, 0)
         array(row, 'devices').forEach((v) => { const d = object(v); number(d, 'deviceId'); string(d, 'deviceName') })
         array(row, 'warnings')

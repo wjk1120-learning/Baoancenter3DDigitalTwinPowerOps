@@ -21,8 +21,17 @@ export default defineConfig(({ command, mode }) => {
       host: true,
       proxy: serving
         ? {
-            // REST：宝中数据后端（契约沿用福永；转发前缀与重写规则联调时定）
-            ...(bz ? { '/bz-hospital': { target: bz, changeOrigin: true } } : {}),
+            // REST：宝中数据后端。/bz-hospital 由代理重写回 /BZ（后端真实前缀；
+            // 与福永 /fy-hospital → /FY 同款约定，生产由 nginx 做同样重写）
+            ...(bz
+              ? {
+                  '/bz-hospital': {
+                    target: bz,
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(/^\/bz-hospital/, '/BZ'),
+                  },
+                }
+              : {}),
             // 认证中心（logout / tickets / exchange）
             ...(auth ? { '/auth': { target: auth, changeOrigin: true } } : {}),
             // WebSocket：事件推送 /ws/event（能耗为轮询，无 WS）

@@ -16,14 +16,21 @@ const CABINET_HEIGHT = 2.2
 // BASE_URL 前缀跟随 vite base（/baozhongTwin/），域名根绝对路径在带前缀部署下会 404
 const MODEL_URL = (m: string) => `${import.meta.env.BASE_URL}models/cabinets/${m}.glb`
 
-/** 台账柜型 → 模型文件名（宝中 4+1 类型；与 mock MODEL_TO_TYPE 互为反向，两处改动要同步） */
+/**
+ * 台账柜型 → 模型文件名。
+ * ⚠ 类型名以后端为准（2026-11-25 联调认门，用户拍板「后端返回为主」）：后端设备类型
+ * 字典（§5.1 /configuration/device-types）实测为 5 种 —— 低压配电柜 / 电池组 / 配电箱 /
+ * 高压开关柜 / 干式变压器。映射按后端类型名逐字维护：
+ *   - 低压配电柜 → jinxian（进线柜模型，语义最接近的现有模型）
+ *   - 高压开关柜 → gaoyagui（模型已交付）
+ *   - 配电箱 / 干式变压器 / 电池组 → 暂无专用模型，走 modelOfType 兜底 peidiangui；
+ *     建模到位后在表内补对应行即可。
+ * 旧 mock 时代的类型名（低压柜/配电柜/电容柜/双电源切换柜/高压柜）已随 mock 移除，
+ * 后端不再返回这些名称；GLB 文件名沿用现场素材原名拼写（shaungdianyaun.glb，非笔误）。
+ */
 const TYPE_TO_MODEL: Record<string, string> = {
-  低压柜: 'jinxian',
-  配电柜: 'peidiangui',
-  电容柜: 'dianrongui',
-  // 文件名沿用现场素材原名拼写（shaungdianyaun.glb，非笔误）
-  双电源切换柜: 'shaungdianyaun',
-  高压柜: 'gaoyagui',
+  低压配电柜: 'jinxian',
+  高压开关柜: 'gaoyagui',
 }
 
 export function modelOfType(type: string | null | undefined): string {

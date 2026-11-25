@@ -40,19 +40,25 @@ const switchingOptions = computed(() =>
 const superOptions = computed(() => supers.value.map((c) => ({ value: c.id, label: c.name })))
 const deviceOptions = computed(() => devices.value.map((d) => ({ value: d.id, label: d.name })))
 
-/** 六仪表：A/B/C 相电压 + A/B/C 相电流（缺测点的相按 0 展示，福永同口径） */
+/**
+ * 六仪表：A/B/C 相电压 + A/B/C 相电流。
+ * ⚠ 匹配口径（2026-11-25 联调认门，用户拍板）：后端 §1.11 measName 返回 CET 英文代码
+ * （实测 Ua/Ub/Uc/Ia/Ib/Ic/Pa…），不再是中文「A相电压」——前端按代码匹配、显示仍用
+ * 中文（映射即本表，后端加测点时在此补行）。缺测点的相按 0 展示，福永同口径。
+ */
+const MEAS_POINTS: { code: string; label: string }[] = [
+  { code: 'Ua', label: 'A相电压' },
+  { code: 'Ia', label: 'A相电流' },
+  { code: 'Ub', label: 'B相电压' },
+  { code: 'Ib', label: 'B相电流' },
+  { code: 'Uc', label: 'C相电压' },
+  { code: 'Ic', label: 'C相电流' },
+]
 const displayPoints = computed(() => {
   const pts = readings.value ?? []
-  const findVal = (name: string): number => pts.find((p) => p.name === name)?.value ?? 0
+  const findVal = (code: string): number => pts.find((p) => p.name === code)?.value ?? 0
   return readings.value
-    ? [
-        { name: 'A相电压', value: findVal('A相电压') },
-        { name: 'A相电流', value: findVal('A相电流') },
-        { name: 'B相电压', value: findVal('B相电压') },
-        { name: 'B相电流', value: findVal('B相电流') },
-        { name: 'C相电压', value: findVal('C相电压') },
-        { name: 'C相电流', value: findVal('C相电流') },
-      ]
+    ? MEAS_POINTS.map(({ code, label }) => ({ name: label, value: findVal(code) }))
     : []
 })
 

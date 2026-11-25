@@ -183,3 +183,27 @@ export async function fetchHealthAverage(): Promise<number | null> {
   const data = await bzGet<number | null>('/device/health/average', undefined, conf())
   return typeof data === 'number' && Number.isFinite(data) && data > 0 ? data : null
 }
+
+/**
+ * §1.17 设备列表导出 xlsx：GET /device/export，无参数，全量含停用设备
+ * （后端生成文件，楼栋→箱柜→设备排序）。2026-11-25 联调接入（照搬福永 exportDeviceExcel）。
+ * 响应是二进制文件流、非 BaseResult 信封——拦截器对 Blob 原样透传；导出失败时后端返回
+ * HTTP 200 + JSON BaseResult(code=0)，契约要求按 Content-Type（blob.type 含 json）区分
+ * 成败并抛出后端 msg。JWT 拦截器只认 Authorization 头，必须 AJAX blob 下载
+ * （window.open/<a> 直链会 401）。权限：仅 level 0/1，外部人员 403（按钮侧隐藏）。
+ */
+export async function exportDeviceExcel(): Promise<Blob> {
+  const blob = await bzGet<Blob>('/device/export', undefined, { responseType: 'blob' })
+  if (blob && typeof blob === 'object' && typeof blob.type === 'string' && blob.type.includes('json')) {
+    const text = await blob.text()
+    let msg = '导出失败'
+    try {
+      const parsed = JSON.parse(text) as { msg?: unknown }
+      if (parsed && typeof parsed.msg === 'string' && parsed.msg.trim()) msg = parsed.msg.trim()
+    } catch {
+      // JSON 解析失败按兜底文案抛出
+    }
+    throw new Error(msg)
+  }
+  return blob
+}
