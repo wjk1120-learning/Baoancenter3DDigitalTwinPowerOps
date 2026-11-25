@@ -41,13 +41,21 @@ const handleStatusCls = computed(() => {
   return done ? 'st-done' : 'st-pending'
 })
 
+/** 管理编号（2026-11-25 用户改稿）：展示告警定位的原始 locationNumber（多条「、」连接），
+ *  替换原「事件ID」行 */
+const locationNumbers = computed(() =>
+  (props.alert?.locations ?? [])
+    .map((l) => (l.locationNumber ?? '').trim())
+    .filter(Boolean),
+)
+
 const rows = computed(() => {
   const a = props.alert
   if (!a) return []
   return [
-    { key: '事件ID', value: a.id || '—', mono: true },
     { key: '告警时间', value: a.time || '—', mono: true },
     { key: '设备ID', value: a.deviceId || '—', mono: true },
+    { key: '管理编号', value: locationNumbers.value.join('、') || '—', mono: true },
     { key: '设备名称', value: a.device || '—', mono: false },
     { key: '告警位置', value: formatAlertLocations(a.locations) || '—', mono: false },
     { key: '事件描述', value: a.content || '—', mono: false, block: true },

@@ -13,18 +13,20 @@ const props = defineProps<{
   refreshToken?: number
 }>()
 
-/** 图表只统计 1紧急/2严重/3一般 三档（用户定稿：提醒不进图，仅表格展示） */
-const CHART_GRADES = GRADE_META.filter((g) => g.id !== 4)
+/** 图表等级口径（2026-11-25 用户改稿）：四档全部进图，0 也显示图例——
+ *  原口径「提醒不进图，仅表格展示」作废（真实数据出现提醒级后图例缺档造成误读） */
+const CHART_GRADES = GRADE_META
 
 const gradeTotal = computed(() => CHART_GRADES.reduce((s, g) => s + (props.gradeCounts[g.id] ?? 0), 0))
 
 // ============ 今日告警分布（§3.1 GET /FY/event/today 真实计数；无告警画空态，不造假扇区） ============
 
-/** 三档（1紧急 2严重 3一般）；提醒级不进图（用户定稿），沿用告警色板 */
+/** 四档（1紧急 2严重 3一般 4提醒），沿用告警色板（提醒=muted 灰，同 AlertDetailDrawer） */
 const TODAY_LEVEL_META: { id: AlertEventLevel; label: string; color: string }[] = [
   { id: 1, label: '紧急', color: chartColors.danger },
   { id: 2, label: '严重', color: chartColors.warn },
   { id: 3, label: '一般', color: chartColors.primary },
+  { id: 4, label: '提醒', color: chartColors.muted },
 ]
 
 const todayDist = ref<Awaited<ReturnType<typeof fetchTodayLevelDistribution>>>(null)
@@ -48,12 +50,13 @@ watch(
 const todayOpt = computed<EChartsOption | null>(() => {
   const dist = todayDist.value
   if (!dist || !dist.total) return null
+  // 零值档也进 data（扇区不渲染但图例可见，2026-11-25 改稿：四档图例常显）
   const slices = TODAY_LEVEL_META.map((m) => ({
     name: m.label,
     value: dist.counts[m.id],
     itemStyle: { color: m.color },
-  })).filter((s) => s.value > 0)
-  if (!slices.length) return null
+  }))
+  if (!slices.some((s) => s.value > 0)) return null
   return {
     tooltip: { trigger: 'item' },
     legend: {
@@ -140,7 +143,7 @@ const levelOpt = computed<EChartsOption>(() => {
   }
 })
 
-// 类型统计：三档横条（提醒不进图）
+// 类型统计：四档横条（紧急→提醒自上而下）
 const typeOpt = computed<EChartsOption>(() => {
   const rows = [...CHART_GRADES].reverse()
   return {

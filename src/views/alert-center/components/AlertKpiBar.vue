@@ -28,7 +28,8 @@ defineProps<{
       <span class="kpi-lbl">紧急</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-val">{{ rate.toFixed(0) }}%</span>
+      <!-- 处理率原样显示后端值（§3.6 handleRate 两位小数，2026-11-25 用户拍板：前端不加工） -->
+      <span class="kpi-val">{{ rate }}%</span>
       <span class="kpi-lbl">处理率</span>
     </div>
   </div>
