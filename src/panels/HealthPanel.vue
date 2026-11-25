@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import BaseChart from './BaseChart.vue'
 import { fetchHealthAverage, fetchHealthLevelStats } from '../api/device/device'
 import type { DeviceHealthLevelStats } from '../api/device/types'
@@ -13,7 +13,7 @@ import { GRADE_META } from '../config/healthGrades'
 const score = ref<number | null>(null)
 const gradeStats = ref<DeviceHealthLevelStats | null>(null)
 
-onMounted(load)
+// 只挂 onActivated：keep-alive 首次挂载 activated 也会触发，双挂会首屏双发（2026-11-25 联调实测）
 onActivated(load)
 
 async function load() {

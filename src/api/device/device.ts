@@ -9,7 +9,6 @@
  * 测点等明细由点击触发（按需请求规则）。
  */
 import { bzGet, DATA_FETCH_TIMEOUT_MS } from '../../utils/http'
-import { KeyedMemoryCache } from '../../utils/cache'
 import type { RequestConfig } from '../../utils/http'
 import type {
   BuildingInfo,
@@ -22,10 +21,6 @@ import type {
   SwitchingInfo,
   SwitchingSuperBrief,
 } from './types'
-
-/** 测点走 Redis 300 秒缓存（§1.11），客户端同周期缓存一次 */
-const MEAS_CLIENT_TTL_MS = 300_000
-const measCache = new KeyedMemoryCache<MeasInfo[]>(MEAS_CLIENT_TTL_MS)
 
 function conf(): RequestConfig {
   return { timeout: DATA_FETCH_TIMEOUT_MS, silent: true }
@@ -148,12 +143,12 @@ export async function fetchSuperById(superId: number): Promise<SuperDeviceProfil
   return data && data.id ? data : null
 }
 
-/** §1.11 设备测点明细（点击「点位」时按需请求；服务端 Redis 300s + 客户端同周期缓存） */
+/** §1.11 设备测点明细（点击「点位」时按需请求）。新鲜度由服务端 Redis 300s 缓存兜，
+ *  前端不再叠加缓存（2026-11-25 用户拍板：后端已缓存，前端再缓存会让 Network 看不到
+ *  请求、最坏新鲜度叠到 10 分钟，联调与排查都受干扰）。 */
 export async function fetchMeasurements(deviceId: number): Promise<MeasInfo[]> {
-  return measCache.load(String(deviceId), async () => {
-    const data = await bzGet<MeasInfo[]>(`/device/${deviceId}/measurements`, undefined, conf())
-    return Array.isArray(data) ? data : []
-  })
+  const data = await bzGet<MeasInfo[]>(`/device/${deviceId}/measurements`, undefined, conf())
+  return Array.isArray(data) ? data : []
 }
 
 /** §1.12 健康度五档统计（buildingId 不传 = 全量） */

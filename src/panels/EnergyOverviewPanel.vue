@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onUnmounted, ref } from 'vue'
 import { fetchDeviceCount } from '../api/device/device'
 import { fetchEnergyToday, fetchEnergyYesterday } from '../api/energy/energy'
 import type { EnergyDailyStats, EnergyTodayStats } from '../api/energy/types'
@@ -40,7 +40,8 @@ function stopPoll() {
     pollTimer = null
   }
 }
-onMounted(startPoll)
+// 只挂 onActivated：keep-alive 组件首次挂载时 activated 也会触发，onMounted+onActivated
+// 双挂会首屏双发请求（2026-11-25 联调实测 count/today/yesterday 各重复一次）；失活即停。
 onActivated(startPoll)
 onDeactivated(stopPoll)
 onUnmounted(stopPoll)

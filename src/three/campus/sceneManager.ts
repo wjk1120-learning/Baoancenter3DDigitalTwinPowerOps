@@ -389,8 +389,10 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
       el.style.display = 'none'
       return
     }
-    // 楼层聚焦态隐藏全部楼名标签（楼名卡挡下钻视线；退回全景/楼栋态自动恢复）
-    if (focusedFloor != null) {
+    // 聚焦态（楼栋聚焦/楼层聚焦）隐藏全部楼名标签：聚焦后机位贴近，其它楼的标签会
+    // 飘在聚焦楼画面上挡视线（2026-11-25 用户反馈；原版只藏楼层聚焦，楼栋聚焦残留）。
+    // 退回全景自动恢复。
+    if (focusedId != null) {
       el.style.display = 'none'
       return
     }
@@ -514,6 +516,11 @@ export function createCampusScene(container: HTMLElement, cb: CampusSceneOptions
     renderer.forceContextLoss?.()
     renderer.domElement.remove()
     css2d.domElement.remove()
+    // 楼名标签层同拆：不拆会在 keep-alive 失活→激活重建后残留一套旧标签（DOM 定格在
+    // 失活前的屏幕位置），容器里新旧两套并存——用户看到「每个标签出现两次」
+    //（2026-11-25 用户反馈）。labelEls 一并清空，防悬挂引用。
+    labelHost.remove()
+    labelEls.clear()
   }
 
   /** mesh 是否在某个楼栋子树内（楼栋根 name = building-{id}） */

@@ -75,7 +75,10 @@ const filteredRows = computed<Row[]>(() => {
     .map((p) => ({
       ...p,
       unit: unitOf(p.typeCode),
-      value: measMap.value[p.typeCode] ?? null,
+      // 双向兼容匹配（2026-11-25 联调实测：后端测点命名两套并存——CET 直采电表为英文
+      // 代码 Ia/Ua（与字典 typeCode 同体系），部分设备为中文名「A相电流」（与字典
+      // typeName 同体系）——按 code 优先、typeName 兜底，两套都能命中。
+      value: measMap.value[p.typeCode] ?? measMap.value[p.typeName] ?? null,
       checked: checkedCodes.value.includes(p.typeCode),
     }))
 })
