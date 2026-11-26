@@ -101,8 +101,7 @@ watch(
   { immediate: true },
 )
 
-/** WS 联动（批3）：event 单条推送归属本楼（楼层模式再加 floor 双匹配）→ 只重拉 §3.7。
- *  mock 模式 WS 不建连，本订阅静默无效。 */
+/** WS 联动（批3）：event 单条推送归属本楼（楼层模式再加 floor 双匹配）→ 只重拉 §3.7。 */
 async function reloadAlarmCount() {
   const cnt = await fetchBuildingCurrentAlarmCount(props.buildingId, props.floor ?? undefined).catch(
     () => null,

@@ -14,7 +14,7 @@ import logoUrl from '../assets/logo.png'
 /**
  * 顶部栏（视觉照搬福永 TopBar）：品牌 + 页内标签条 + 导航下拉 + 时钟 + 用户名/退出 + 全屏。
  * 宝安差异：下拉菜单自写（未用 naive Dropdown）；会话来自 utils/session
- * （mock 模式由 src/mock/authMock 播种，真登录 4.0 下半接入）。
+ * （运维平台签发票据跳转或 URL 带 ticket 交换获得，见 bootstrap/authBootstrap）。
  */
 const router = useRouter()
 const pageTabs = usePageTabsStore()

@@ -6,7 +6,7 @@
  */
 
 export interface CampusBuildingConfig {
-  /** buildingId（§1.2 / mock buildings 同源） */
+  /** buildingId（= 后端 §1.2 /device/buildings 的楼栋 id） */
   id: number
   /** 楼名（信息卡/楼名标签显示） */
   name: string

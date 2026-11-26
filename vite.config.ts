@@ -6,8 +6,8 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const serving = command === 'serve'
 
-  // 代理 target 可缺省：mock 开发（VITE_USE_MOCK=true）不出网络用不到代理；
-  // 联调时在 .env.development 填 BZ_PROXY_TARGET / AUTH_PROXY_TARGET / WS_PROXY_TARGET
+  // 代理仅在 dev（serve）模式注册：缺 target 时对应代理不生成（相关请求 404）；
+  // 地址见 .env.development（BZ_PROXY_TARGET / AUTH_PROXY_TARGET / WS_PROXY_TARGET）
   const bz = env.BZ_PROXY_TARGET?.trim() ?? ''
   const auth = env.AUTH_PROXY_TARGET?.trim() ?? ''
   const ws = env.WS_PROXY_TARGET?.trim() ?? ''

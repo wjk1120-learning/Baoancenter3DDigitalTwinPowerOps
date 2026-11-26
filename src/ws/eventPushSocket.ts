@@ -1,7 +1,6 @@
 import { coerceEventInfo, mapEventInfoToAlert } from '../api/event/mappers'
 import type { EventInfo } from '../api/event/types'
 import type { AlertItem } from '../api/hospital/types'
-import { useMock } from '../mock'
 import { WsHealthWatch } from './wsHealthWatch'
 import { buildWsUrl } from './wsUrl'
 
@@ -13,8 +12,7 @@ type SingleHandler = (item: AlertItem) => void
  * 只认契约三种消息名：today_events（全量替换）/ event（单条新事件，level≤2）/
  * event_handled（单条已处理）；其余消息名一律忽略（不做别名兜底）。
  * 服务端每 1 分钟推心跳 ping（证明通道活着），客户端回 pong；
- * 断线指数退避重连（1s×2^n 封顶 15s），半死连接由 WsHealthWatch stale 检测接管；
- * mock 模式不建连（REST 全走 adapter，WS 属切真链路）。
+ * 断线指数退避重连（1s×2^n 封顶 15s），半死连接由 WsHealthWatch stale 检测接管。
  */
 class EventPushSocket {
   private ws: WebSocket | null = null
@@ -96,7 +94,6 @@ class EventPushSocket {
   }
 
   connect() {
-    if (useMock()) return
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return
     this.manuallyClosed = false
     this.ws = new WebSocket(this.url())

@@ -3,7 +3,7 @@ defineProps<{
   name: string
   deviceNumber: string
   deviceType: string
-  /** 所属楼栋（mock 目录柜带 buildingId 对楼栋名；§1.4 契约无此字段，联调切真后端不回则显示「—」） */
+  /** 所属楼栋（§1.4 行随行下发；后端未回时显示「—」） */
   buildingName: string
   commissionDate: string
 }>()

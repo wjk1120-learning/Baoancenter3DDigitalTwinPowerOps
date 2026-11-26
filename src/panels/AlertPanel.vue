@@ -4,7 +4,6 @@ import { fetchTodayAlerts } from '../api/event/event'
 import { eventLevelLabel, normalizeEventLevel } from '../api/event/mappers'
 import type { AlertEventLevel, AlertItem } from '../api/hospital/types'
 import { eventPushSocket } from '../ws/eventPushSocket'
-import { useMock } from '../mock'
 import AlertDetailDialog from '../components/AlertDetailDialog.vue'
 
 /**
@@ -12,15 +11,14 @@ import AlertDetailDialog from '../components/AlertDetailDialog.vue'
  * 数据链 = 首进 §3.1 全量（v5.9.2 起契约取消分页）→ WS 实时接管：
  * today_events 整表替换 / event 单条→防抖重拉 §3.1 / event_handled→更新本地行；
  * 断线重连成功或 stale（90s 无消息的半死连接）→ 重拉 §3.1 对齐。
- * 无缓存层（用户口径）；mock 模式不建 WS、仅 REST，不显示连接标识。
+ * 无缓存层（用户口径）。
  * 渲染：返回多少展示多少（接口返回即全量），列表内部滚动；条目样式照福永
  * （等级色左边条玻璃小卡 + 四级配色 pill + 短时间格式）。
  */
 const alerts = ref<AlertItem[]>([])
 const loading = ref(true)
-/** WS 连接状态：ok=实时 / reconnecting=断线重连中 / stale=数据可能延迟；mock 恒 ok 不显示 */
+/** WS 连接状态：ok=实时 / reconnecting=断线重连中 / stale=数据可能延迟 */
 const connState = ref<'ok' | 'reconnecting' | 'stale'>('ok')
-const wsEnabled = !useMock()
 
 let loadSeq = 0
 async function loadAlerts() {
@@ -45,40 +43,32 @@ function scheduleReload() {
   singleDebounceTimer = window.setTimeout(() => void loadAlerts(), 3000)
 }
 
-const offToday = wsEnabled ? eventPushSocket.onTodayList((items) => (alerts.value = items)) : null
-const offSingle = wsEnabled ? eventPushSocket.onSingle(() => scheduleReload()) : null
-const offHandled = wsEnabled
-  ? eventPushSocket.onHandled((item) => {
-      const hit = alerts.value.find((a) => a.id === item.id)
-      if (hit) hit.status = item.status
-    })
-  : null
-const offOpen = wsEnabled
-  ? eventPushSocket.onOpen(() => {
-      connState.value = 'ok'
-      void loadAlerts()
-    })
-  : null
-const offClose = wsEnabled
-  ? eventPushSocket.onClose(() => (connState.value = 'reconnecting'))
-  : null
-const offStale = wsEnabled
-  ? eventPushSocket.onStale(() => {
-      connState.value = 'stale'
-      void loadAlerts()
-    })
-  : null
+const offToday = eventPushSocket.onTodayList((items) => (alerts.value = items))
+const offSingle = eventPushSocket.onSingle(() => scheduleReload())
+const offHandled = eventPushSocket.onHandled((item) => {
+  const hit = alerts.value.find((a) => a.id === item.id)
+  if (hit) hit.status = item.status
+})
+const offOpen = eventPushSocket.onOpen(() => {
+  connState.value = 'ok'
+  void loadAlerts()
+})
+const offClose = eventPushSocket.onClose(() => (connState.value = 'reconnecting'))
+const offStale = eventPushSocket.onStale(() => {
+  connState.value = 'stale'
+  void loadAlerts()
+})
 
 onMounted(() => {
   void loadAlerts()
 })
 onUnmounted(() => {
-  offToday?.()
-  offSingle?.()
-  offHandled?.()
-  offOpen?.()
-  offClose?.()
-  offStale?.()
+  offToday()
+  offSingle()
+  offHandled()
+  offOpen()
+  offClose()
+  offStale()
   if (singleDebounceTimer != null) window.clearTimeout(singleDebounceTimer)
 })
 
@@ -120,7 +110,7 @@ function onDialogHandled() {
 
 <template>
   <div class="alert-panel">
-    <div v-if="wsEnabled && connState !== 'ok'" class="conn-flag" :class="connState">
+    <div v-if="connState !== 'ok'" class="conn-flag" :class="connState">
       {{ connText }}
     </div>
 

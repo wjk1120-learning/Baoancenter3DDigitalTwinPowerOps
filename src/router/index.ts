@@ -44,7 +44,6 @@ const router = createRouter({
     // 调试页仅 dev 注册（import.meta.env.DEV 构建期替换，生产不含此 chunk）
     ...(import.meta.env.DEV
       ? [
-          { path: '/tests/mock', component: () => import('../tests/MockDebugPage.vue') },
           {
             path: '/tests/power-room',
             component: () => import('../tests/PowerRoomDebugPage.vue'),
@@ -58,12 +57,12 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!readAuthToken()) {
-    // 无 token 整页跳运维平台登录（福永同款）；mock 模式 authMock 启动已播种，不会走到
+    // 无 token 整页跳运维平台登录（福永同款）
     redirectUnauthorized()
     return false
   }
   // 配置中心仅内部人员：外部人员(userLevel=2)直接输 URL 进来时兜底回总览（福永同款；
-  // 入口可见性见 TopBar navOptions 过滤，mock 模式 authMock 播种的内部用户不会走到）
+  // 入口可见性见 TopBar navOptions 过滤）
   if (to.path.startsWith('/configuration') && !canAccessConfigurationCenter(readAuthUser())) {
     return '/hospital'
   }
