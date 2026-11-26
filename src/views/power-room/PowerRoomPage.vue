@@ -37,9 +37,9 @@ const options = rooms.map((r) => ({ label: r.name, value: r.id }))
 const totalCount = rooms.reduce((n, r) => n + r.rows.flat().length, 0)
 const currentName = computed(() => rooms.find((r) => r.id === currentId.value)?.name ?? '')
 
-// ---- §1.3 房名 → switchingId；§1.6 按房缓存（每房仅首次发请求，失败不缓存可重试） ----
+// ---- §1.3 房名 → switchingId；§1.6 按房实时拉取（2026-11-25 用户拍板：前端不做缓存，
+//      进哪间房/点哪台柜就发对应请求，配置中心改绑定后切房即见） ----
 const switchingIdByRoom = ref(new Map<string, number>())
-const supersCache = new Map<number, Promise<SwitchingSuperBrief[]>>()
 
 const roomName = (roomId: string) => rooms.find((r) => r.id === roomId)?.name ?? roomId
 
@@ -57,24 +57,18 @@ async function loadSwitchings() {
     globalMessage()?.error('配电房列表数据加载失败')
     return
   }
-  // 进房即拉 §1.6（福永 roomSource 同款时机），默认房预热
+  // 进房即拉 §1.6，默认房预热
   await loadSupers(currentId.value)?.catch(() => {})
 }
 
-/** §1.6 按房取用（缓存 Promise 防并发重复请求；失败 toast 并删除缓存条目，下次点击现场重试） */
+/** §1.6 按房实时拉取（每次调用都发请求；失败 toast，下次点击现场重试） */
 function loadSupers(roomId: string): Promise<SwitchingSuperBrief[]> | null {
   const switchingId = switchingIdByRoom.value.get(roomId)
   if (!switchingId) return null
-  let p = supersCache.get(switchingId)
-  if (!p) {
-    p = fetchSwitchingSupers(switchingId).catch((err) => {
-      supersCache.delete(switchingId)
-      globalMessage()?.error(`${roomName(roomId)}下的柜体信息加载失败`)
-      throw err
-    })
-    supersCache.set(switchingId, p)
-  }
-  return p
+  return fetchSwitchingSupers(switchingId).catch((err) => {
+    globalMessage()?.error(`${roomName(roomId)}下的柜体信息加载失败`)
+    throw err
+  })
 }
 
 // ---- 点柜看板状态 ----
