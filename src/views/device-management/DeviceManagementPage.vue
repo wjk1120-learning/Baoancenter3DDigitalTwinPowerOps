@@ -61,6 +61,8 @@ const sidebarTotal = ref(0)
 // 本地分页（12 条/页，序号跨页累加；用户拍板 12 条对齐福永观感）
 const page = ref(1)
 const PAGE_SIZE = 12
+/** 目录/五档加载失败（阶段6）：列表空态与五档卡显示失败，不用 0 冒充 */
+const loadError = ref(false)
 
 // 健康度筛选（本地，作用于当前范围行）
 const selectedGrade = ref<HealthGrade>('all')
@@ -140,7 +142,8 @@ async function fetchAllRows(buildingId: number | null): Promise<SuperDeviceRow[]
   return rows
 }
 
-/** 首次进入（医院级，2 个请求）：§1.4 全量（行派生楼栋树/角标/总数）+ §1.12 五档 */
+/** 首次进入（医院级，2 个请求）：§1.4 全量（行派生楼栋树/角标/总数）+ §1.12 五档。
+ *  失败置 loadError（阶段6）：五档卡显示「—」、列表空态显示失败文案，不用 0 冒充 */
 async function loadHospital() {
   loading.value = true
   try {
@@ -156,6 +159,11 @@ async function loadHospital() {
     }
     buildingTree.value = [...map.values()].sort((a, b) => a.chnID - b.chnID)
     health.value = await fetchHealthLevelStats(undefined)
+    loadError.value = false
+  } catch {
+    cabinets.value = []
+    browseRows.value = []
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -173,9 +181,19 @@ async function loadSelection() {
     cabinets.value = rows
     browseRows.value = rows
     health.value = stats
+    loadError.value = false
+  } catch {
+    cabinets.value = []
+    loadError.value = true
   } finally {
     loading.value = false
   }
+}
+
+/** 失败重试：按当前范围重新加载（阶段6） */
+function retryLoad() {
+  if (selectedBuilding.value == null) void loadHospital()
+  else void loadSelection()
 }
 
 onMounted(() => {
@@ -227,12 +245,13 @@ async function doSearch() {
   }
 }
 
-/** 表格空态提示：选中楼栋时 0 匹配引导切回全院检索 */
-const emptyHint = computed(() =>
-  selectedBuilding.value != null && tableMode.value === 'cabinet'
+/** 表格空态提示：加载失败优先（阶段6）；选中楼栋时 0 匹配引导切回全院检索 */
+const emptyHint = computed(() => {
+  if (loadError.value) return '设备目录加载失败，点上方「重试」重新加载'
+  return selectedBuilding.value != null && tableMode.value === 'cabinet'
     ? '当前楼栋下无匹配，可切回「全部楼栋」检索'
-    : '',
-)
+    : ''
+})
 
 // ---- 导出（§1.17，2026-11-25 联调接入）：后端全量 xlsx，AJAX blob + Authorization 下载 ----
 /** 导出进行中标记：后端生成全量 xlsx 需 1~2s，防重复点击 */
@@ -371,6 +390,11 @@ function enterDevice3D(cabinet: SuperDevice) {
       </header>
 
       <main class="dm-content">
+        <!-- 目录加载失败条（阶段6）：就地提示 + 重试，不用空数据冒充 -->
+        <div v-if="loadError && !loading" class="dm-error">
+          <span>设备目录加载失败</span>
+          <button type="button" @click="retryLoad">重试</button>
+        </div>
         <CabinetTable
           :mode="tableMode"
           :rows="tableMode === 'device' ? deviceRows : paged"
@@ -387,7 +411,12 @@ function enterDevice3D(cabinet: SuperDevice) {
           @page="onPage"
         />
         <p v-if="tableMode === 'device' && searchLoading" class="dm-hint">正在检索…</p>
-        <HealthAside :counts="gradeCounts" :selected="selectedGrade" @select="selectGrade" />
+        <HealthAside
+          :counts="gradeCounts"
+          :selected="selectedGrade"
+          :error="loadError"
+          @select="selectGrade"
+        />
       </main>
     </div>
 
@@ -593,6 +622,34 @@ function enterDevice3D(cabinet: SuperDevice) {
   margin: 8px 0 0;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* 目录加载失败条（阶段6）：就地提示 + 重试 */
+.dm-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.35);
+  color: var(--danger-text);
+  font-size: 13px;
+}
+.dm-error button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--danger-text);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.dm-error button:hover {
+  background: rgba(229, 72, 77, 0.12);
 }
 </style>
 

@@ -24,6 +24,8 @@ const props = defineProps<{
 const deviceId = ref<number | null>(null)
 const days = ref<DeviceDailyEnergy[]>([])
 const loading = ref(false)
+/** 能耗加载失败（阶段6）：清掉旧数据并提示，不再留着上一台设备的曲线冒充 */
+const loadError = ref(false)
 
 const deviceOptions = computed(() =>
   props.devices.map((d) => ({ label: d.deviceName, value: d.deviceId })),
@@ -35,11 +37,16 @@ const menuTheme = { peers: { InternalSelectMenu: { height: '180px' } } }
 async function loadEnergy() {
   if (deviceId.value == null) {
     days.value = []
+    loadError.value = false
     return
   }
   loading.value = true
   try {
     days.value = await fetchDeviceDailyEnergy(deviceId.value)
+    loadError.value = false
+  } catch {
+    days.value = []
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -140,7 +147,13 @@ const option = computed<EChartsOption>(() => ({
     <div class="trend-chart">
       <BaseChart :option="option" />
       <div v-if="chartEmpty" class="trend-empty">
-        {{ deviceId == null ? '该设备下暂无开关' : '暂无能耗数据' }}
+        {{
+          loadError
+            ? '能耗加载失败'
+            : deviceId == null
+              ? '该设备下暂无开关'
+              : '暂无能耗数据'
+        }}
       </div>
     </div>
   </section>

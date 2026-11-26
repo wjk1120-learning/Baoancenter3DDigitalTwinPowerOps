@@ -71,6 +71,8 @@ const total = ref(0)
 const page = ref(1)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const loading = ref(false)
+/** 列表加载失败（阶段6）：空态显示失败文案 + 重试，不用空数据冒充 */
+const listError = ref(false)
 
 let listReqSeq = 0
 async function loadList() {
@@ -88,10 +90,12 @@ async function loadList() {
     if (seq !== listReqSeq) return
     rows.value = res.rows
     total.value = res.total
+    listError.value = false
   } catch {
     if (seq !== listReqSeq) return
     rows.value = []
     total.value = 0
+    listError.value = true
   } finally {
     if (seq === listReqSeq) loading.value = false
   }
@@ -158,6 +162,7 @@ const listRows = computed<DefectListRow[]>(() =>
 )
 const emptyText = computed(() => {
   if (loading.value) return '缺陷数据加载中…'
+  if (listError.value) return '缺陷列表加载失败，点「重试」重新加载'
   const filtered =
     fRisk.value != null || dateRange.value != null || selectedBuilding.value != null
   return filtered ? '暂无匹配设备' : '暂无设备'
@@ -304,6 +309,12 @@ async function openDeviceDetail(row: DefectListRow) {
           <span class="stat-val">{{ stats?.skipped ?? '—' }}</span>
           <span class="stat-lbl">无需处理</span>
         </div>
+      </div>
+
+      <!-- 列表加载失败条（阶段6）：就地显示 + 重试，不用空数据冒充 -->
+      <div v-if="listError && !loading" class="list-error">
+        <span>缺陷列表加载失败</span>
+        <button type="button" @click="loadList">重试</button>
       </div>
 
       <DeviceListTable
@@ -509,5 +520,32 @@ async function openDeviceDetail(row: DefectListRow) {
 .stat-lbl {
   font-size: 13px;
   color: var(--muted);
+}
+
+/* 列表加载失败条（阶段6）：就地提示 + 重试 */
+.list-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.35);
+  color: var(--danger-text);
+  font-size: 13px;
+}
+.list-error button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--danger-text);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.list-error button:hover {
+  background: rgba(229, 72, 77, 0.12);
 }
 </style>

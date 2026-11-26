@@ -14,6 +14,8 @@ const props = defineProps<{
   totalPages: number
   loading: boolean
   filterLevel: '' | '1' | '2' | '3' | '4'
+  /** 列表加载失败（2026-11-25 阶段6）：空态显示失败文案而非「无告警」 */
+  error?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -87,7 +89,15 @@ function groupKey(g: DeviceEventGroup) {
           </tr>
           <tr v-if="!props.rows.length">
             <td colspan="6" class="dempty">
-              {{ props.loading ? '加载中…' : sourceOffline ? '后端未连接' : '无告警' }}
+              {{
+                props.loading
+                  ? '加载中…'
+                  : props.error
+                    ? '列表加载失败，点右上「刷新」重试'
+                    : sourceOffline
+                      ? '后端未连接'
+                      : '无告警'
+              }}
             </td>
           </tr>
         </tbody>

@@ -4,6 +4,8 @@ import { GRADE_META, type HealthGrade } from '../config/healthGrades'
 defineProps<{
   counts: Record<HealthGrade, number>
   selected: HealthGrade
+  /** 五档统计加载失败（阶段6）：数字显示「—」，不用 0 冒充 */
+  error?: boolean
 }>()
 
 const emit = defineEmits<{ select: [grade: HealthGrade] }>()
@@ -23,7 +25,7 @@ const emit = defineEmits<{ select: [grade: HealthGrade] }>()
         <span class="hc-label">{{ g.label }}</span>
         <span class="hc-hint">{{ g.hint }}</span>
       </div>
-      <div class="hc-num num">{{ counts[g.id] }}</div>
+      <div class="hc-num num">{{ error ? '—' : counts[g.id] }}</div>
       <div class="hc-unit">台设备</div>
     </button>
   </aside>

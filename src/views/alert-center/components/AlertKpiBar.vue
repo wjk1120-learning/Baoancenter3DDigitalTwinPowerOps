@@ -1,35 +1,36 @@
 <script setup lang="ts">
-/** 告警中心 KPI 条（福永 ac-kpi 同款：五枚数字卡） */
+/** 告警中心 KPI 条（福永 ac-kpi 同款：五枚数字卡）。
+ *  值允许 null（2026-11-25 阶段6：接口失败显示「—」，不用 0 冒充） */
 defineProps<{
-  total: number
-  today: number
-  unhandled: number
-  urgent: number
-  rate: number
+  total: number | null
+  today: number | null
+  unhandled: number | null
+  urgent: number | null
+  rate: number | null
 }>()
 </script>
 
 <template>
   <div class="ac-kpi glass-panel">
     <div class="kpi-card">
-      <span class="kpi-val">{{ total }}</span>
+      <span class="kpi-val">{{ total ?? '—' }}</span>
       <span class="kpi-lbl">总告警数</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-val">{{ today }}</span>
+      <span class="kpi-val">{{ today ?? '—' }}</span>
       <span class="kpi-lbl">今日告警</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-val warn">{{ unhandled }}</span>
+      <span class="kpi-val warn">{{ unhandled ?? '—' }}</span>
       <span class="kpi-lbl">未处理</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-val danger">{{ urgent }}</span>
+      <span class="kpi-val danger">{{ urgent ?? '—' }}</span>
       <span class="kpi-lbl">紧急</span>
     </div>
     <div class="kpi-card">
       <!-- 处理率原样显示后端值（§3.6 handleRate 两位小数，2026-11-25 用户拍板：前端不加工） -->
-      <span class="kpi-val">{{ rate }}%</span>
+      <span class="kpi-val">{{ rate == null ? '—' : `${rate}%` }}</span>
       <span class="kpi-lbl">处理率</span>
     </div>
   </div>

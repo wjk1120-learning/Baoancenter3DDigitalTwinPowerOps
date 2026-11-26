@@ -16,6 +16,8 @@ const props = defineProps<{
   devices: DeviceBrief[]
   /** 当前选中的开关 id（v-model:selected） */
   selected: number | null
+  /** 历史告警加载失败（阶段6）：空态显示失败而非「暂无」 */
+  error?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -91,7 +93,9 @@ function formatHistTime(t: string) {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
-        <span class="he-main">暂无告警记录</span>
+        <span class="he-main" :class="{ 'he-error': error }">{{
+          error ? '告警加载失败' : '暂无告警记录'
+        }}</span>
       </div>
       <div v-else-if="loading && !alerts.length" class="hist-loading">加载中…</div>
     </div>
@@ -161,6 +165,10 @@ function formatHistTime(t: string) {
 }
 .he-main {
   font-size: 15px;
+}
+/* 加载失败态（阶段6）：告警色区分于「暂无」 */
+.he-error {
+  color: var(--danger-text);
 }
 .hist-loading {
   font-size: 15px;

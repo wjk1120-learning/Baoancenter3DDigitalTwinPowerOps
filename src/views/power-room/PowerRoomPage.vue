@@ -79,6 +79,9 @@ const switches = ref<{ deviceId: number; deviceName: string }[]>([])
 const selectedSwitchName = ref('')
 const measurements = ref<MeasInfo[]>([])
 const measLoading = ref(false)
+/** 测点/历史告警加载失败（阶段6）：看板显示失败文案，不用 0/空 冒充 */
+const measError = ref(false)
+const historyError = ref(false)
 const history = ref<HistoryAlertRow[]>([])
 const historyLoading = ref(false)
 
@@ -87,7 +90,9 @@ function clearPanel() {
   switches.value = []
   selectedSwitchName.value = ''
   measurements.value = []
+  measError.value = false
   history.value = []
+  historyError.value = false
 }
 
 function mountRoom(id: string) {
@@ -174,7 +179,8 @@ function backToOverview() {
   clearPanel()
 }
 
-/** 点开关/选中开关变化：看板两模块（§1.11 测点 + §3.3 历史告警全量）+ 3D 选中强调 */
+/** 点开关/选中开关变化：看板两模块（§1.11 测点 + §3.3 历史告警全量）+ 3D 选中强调。
+ *  失败各自置错误标记（阶段6）：看板显示失败文案，不用 0/空 冒充 */
 async function selectSwitch(deviceId: number, deviceName?: string) {
   selectedSwitchName.value = deviceName ?? ''
   scene?.markSelectedSwitch(deviceId)
@@ -185,7 +191,9 @@ async function selectSwitch(deviceId: number, deviceName?: string) {
     fetchDeviceHistoryEvents(deviceId),
   ])
   measurements.value = meas.status === 'fulfilled' ? meas.value : []
+  measError.value = meas.status === 'rejected'
   const briefs = hist.status === 'fulfilled' ? hist.value : []
+  historyError.value = hist.status === 'rejected'
   history.value = briefs.map(eventBriefToHistoryRow)
   historyLoading.value = false
   measLoading.value = false
@@ -221,8 +229,10 @@ onUnmounted(() => scene?.dispose())
         :selected-switch-name="selectedSwitchName"
         :measurements="measurements"
         :meas-loading="measLoading"
+        :meas-error="measError"
         :history="history"
         :history-loading="historyLoading"
+        :history-error="historyError"
         @view-detail="viewDetail"
       />
     </Transition>

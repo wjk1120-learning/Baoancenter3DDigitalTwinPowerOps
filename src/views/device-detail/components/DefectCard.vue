@@ -8,7 +8,12 @@ import type { CaoliaoRecord } from '../../../api/operation/types'
  * 中间行元数据（记录编号/位置/描述/提交人，有几种显示几种），缩略图行点击放大预览。
  * 点击整卡打开右侧缺陷详情抽屉（DefectDetailDrawer）。
  */
-defineProps<{ records: CaoliaoRecord[]; loading: boolean }>()
+defineProps<{
+  records: CaoliaoRecord[]
+  loading: boolean
+  /** 缺陷记录加载失败（阶段6）：空态显示失败而非「暂无」 */
+  error?: boolean
+}>()
 
 const emit = defineEmits<{ open: [record: CaoliaoRecord] }>()
 
@@ -131,7 +136,7 @@ function thumbs(rec: CaoliaoRecord): string[] {
       >
         <path d="M22 12h-4l-3 8-4-16-3 8H2" />
       </svg>
-      <span>暂无缺陷记录</span>
+      <span :class="{ 'de-error': error }">{{ error ? '缺陷加载失败' : '暂无缺陷记录' }}</span>
     </div>
   </div>
 </template>
@@ -360,5 +365,9 @@ function thumbs(rec: CaoliaoRecord): string[] {
   width: 34px;
   height: 34px;
   color: #b9cee9;
+}
+/* 加载失败态（阶段6）：告警色区分于「暂无」 */
+.de-error {
+  color: var(--danger-text);
 }
 </style>

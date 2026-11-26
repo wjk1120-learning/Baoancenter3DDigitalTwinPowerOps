@@ -22,6 +22,8 @@ defineOptions({ name: 'AlertCenterPage' })
 
 const detailAlert = ref<AlertItem | null>(null)
 const loading = ref(false)
+/** 列表/统计加载失败：KPI 显示「—」、表格显示失败文案（阶段6：不用 0 冒充） */
+const loadError = ref(false)
 const filterLevel = ref<'' | '1' | '2' | '3' | '4'>('')
 const page = ref(1)
 const pageSize = 14
@@ -42,8 +44,11 @@ async function loadList() {
     }
     // 统计仍用全量 stats，避免等级筛选时 KPI 失真
     eventStats.value = await fetchEventStats()
+    loadError.value = false
   } catch {
     listGroups.value = []
+    eventStats.value = null
+    loadError.value = true
   } finally {
     loading.value = false
     statsTick.value++
@@ -193,11 +198,11 @@ function onFilterLevelChange() {
 
     <div class="ac-wrap">
       <AlertKpiBar
-        :total="totalAlerts"
-        :today="todayAlerts"
-        :unhandled="unhandled"
-        :urgent="urgent"
-        :rate="handledRate"
+        :total="loadError ? null : totalAlerts"
+        :today="loadError ? null : todayAlerts"
+        :unhandled="loadError ? null : unhandled"
+        :urgent="loadError ? null : urgent"
+        :rate="loadError ? null : handledRate"
       />
 
       <div class="ac-body">
@@ -210,6 +215,7 @@ function onFilterLevelChange() {
           :page="page"
           :total-pages="totalPages"
           :loading="loading"
+          :error="loadError"
           @update:filter-level="onFilterLevelChange"
           @refresh="loadList()"
           @open="openGroup"

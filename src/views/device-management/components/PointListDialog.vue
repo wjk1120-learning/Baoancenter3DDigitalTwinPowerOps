@@ -20,11 +20,15 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 13
 const loading = ref(false)
+const loadError = ref(false)
 const levelStats = ref<EventLevelStats[]>([])
+/** §3.5 分级统计是否可用（2026-11-25 阶段6：失败不再用全 0 冒充） */
+const levelStatsOk = ref(true)
 
 async function load(pageNo: number) {
   if (!props.cabinet?.id) return
   loading.value = true
+  loadError.value = false
   try {
     const [r, stats] = await Promise.all([
       fetchDevicesBySuper(props.cabinet.id, pageNo, pageSize),
@@ -33,7 +37,12 @@ async function load(pageNo: number) {
     devices.value = r.rows
     total.value = r.total
     page.value = pageNo
-    levelStats.value = toEventLevelStats(stats)
+    levelStatsOk.value = stats != null
+    levelStats.value = stats ? toEventLevelStats(stats) : []
+  } catch {
+    loadError.value = true
+    levelStatsOk.value = false
+    levelStats.value = []
   } finally {
     loading.value = false
   }
@@ -49,12 +58,13 @@ watch(
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 const LEVEL_LABELS = ['', '紧急', '严重', '一般', '提示'] as const
-/** 头部历史告警行：紧急 0 · 严重 26 · 一般 0 · 提示 0（福永同款） */
-const levelStatLine = computed(() =>
-  ([1, 2, 3, 4] as const)
+/** 头部历史告警行：紧急 0 · 严重 26 · 一般 0 · 提示 0（福永同款）；统计接口失败显示不可用 */
+const levelStatLine = computed(() => {
+  if (!levelStatsOk.value) return '分级统计暂不可用'
+  return ([1, 2, 3, 4] as const)
     .map((lv) => `${LEVEL_LABELS[lv]} ${levelStats.value.find((s) => s.eventLevel === lv)?.count ?? 0}`)
-    .join(' · '),
-)
+    .join(' · ')
+})
 
 // Esc 关闭（福永同款）
 watch(
@@ -119,7 +129,9 @@ function onEsc(e: KeyboardEvent) {
                 </td>
               </tr>
               <tr v-if="!devices.length && !loading">
-                <td colspan="5" class="pl-empty">该箱柜暂无测点设备</td>
+                <td colspan="5" class="pl-empty">
+                  {{ loadError ? '测点加载失败，请关闭后重新打开重试' : '该箱柜暂无测点设备' }}
+                </td>
               </tr>
             </tbody>
           </table>

@@ -14,7 +14,6 @@ import type { EChartsOption } from 'echarts'
 import { createDeviceScene, modelOfType, type DeviceScene } from '../../three/device-detail/deviceScene'
 import type { AlertItem, HistoryAlertRow } from '../../api/hospital/types'
 import type { DeviceBrief, SuperDeviceProfile } from '../../api/device/types'
-import type { EventBrief } from '../../api/event/types'
 import type { CaoliaoRecord, InspectDeviceRecord } from '../../api/operation/types'
 import { fetchDeviceBriefsBySuper, fetchSuperById } from '../../api/device/device'
 import { fetchDeviceHistoryEvents } from '../../api/event/event'
@@ -57,7 +56,8 @@ const cabinetError = ref('')
 const displayName = computed(() => cabinet.value?.superName || '—')
 const currentBuilding = computed(() => cabinet.value?.buildingName || '—')
 
-/** 拉单柜详情（按路由 superId）；不存在/失败 → null，走「未找到该箱柜」遮罩 + 重试 */
+/** 拉单柜详情（按路由 superId）；失败 → 遮罩「加载失败 + 重试」（阶段6接通：
+ *  此前 cabinetError 从未被赋值，失败与不存在都显示「未找到」） */
 async function loadCabinet() {
   const sid = superIdQuery.value
   if (!sid) {
@@ -65,7 +65,12 @@ async function loadCabinet() {
     return
   }
   cabinetError.value = ''
-  cabinet.value = await fetchSuperById(sid).catch(() => null)
+  try {
+    cabinet.value = await fetchSuperById(sid)
+  } catch {
+    cabinet.value = null
+    cabinetError.value = '设备档案加载失败'
+  }
 }
 
 /** §1.8 箱柜下设备列表（精简，页面拉一次供电能趋势下拉用；2026-11-06 用户拍板弃 §1.7） */
@@ -80,6 +85,11 @@ const alertDeviceId = ref<number | null>(null)
 const historyAlerts = ref<HistoryAlertRow[]>([])
 const historyLoading = ref(false)
 
+/** 告警/维护/缺陷三卡加载失败标记（阶段6）：卡片空态显示失败而非「暂无」 */
+const histError = ref(false)
+const maintError = ref(false)
+const defectError = ref(false)
+
 async function loadHistory() {
   const id = alertDeviceId.value
   if (id == null) {
@@ -88,8 +98,12 @@ async function loadHistory() {
   }
   historyLoading.value = true
   try {
-    const events = await fetchDeviceHistoryEvents(id).catch(() => [] as EventBrief[])
+    const events = await fetchDeviceHistoryEvents(id)
     historyAlerts.value = events.map(eventBriefToHistoryRow)
+    histError.value = false
+  } catch {
+    historyAlerts.value = []
+    histError.value = true
   } finally {
     historyLoading.value = false
   }
@@ -106,8 +120,10 @@ async function loadMaintenance() {
   maintLoading.value = true
   try {
     maintenanceRecords.value = num ? await fetchInspectionRecordsByDeviceNumber(num) : []
+    maintError.value = false
   } catch {
     maintenanceRecords.value = []
+    maintError.value = true
   } finally {
     maintLoading.value = false
   }
@@ -122,8 +138,10 @@ async function loadDefects() {
   defectLoading.value = true
   try {
     defectRecords.value = num ? await fetchDefectRecordsByDeviceNumber(num) : []
+    defectError.value = false
   } catch {
     defectRecords.value = []
+    defectError.value = true
   } finally {
     defectLoading.value = false
   }
@@ -354,11 +372,17 @@ function onKeydown(e: KeyboardEvent) {
             :building-name="currentBuilding"
             :commission-date="cabinet.commissionDate || ''"
           />
-          <DefectCard :records="defectRecords" :loading="defectLoading" @open="openDefect" />
+          <DefectCard
+            :records="defectRecords"
+            :loading="defectLoading"
+            :error="defectError"
+            @open="openDefect"
+          />
           <HistoryAlertCard
             v-model:selected="alertDeviceId"
             :alerts="historyAlerts"
             :loading="historyLoading"
+            :error="histError"
             :devices="cabDevices"
             @open="openHistAlert"
           />
@@ -369,6 +393,7 @@ function onKeydown(e: KeyboardEvent) {
           <MaintCard
             :records="maintenanceRecords"
             :loading="maintLoading"
+            :error="maintError"
             :cabinet-name="displayName"
           />
         </aside>

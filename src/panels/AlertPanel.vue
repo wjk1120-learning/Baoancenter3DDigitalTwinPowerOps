@@ -17,6 +17,8 @@ import AlertDetailDialog from '../components/AlertDetailDialog.vue'
  */
 const alerts = ref<AlertItem[]>([])
 const loading = ref(true)
+/** §3.1 拉取失败（阶段6）：空态显示「加载失败，点击重试」，不用空数据冒充 */
+const loadError = ref(false)
 /** WS 连接状态：ok=实时 / reconnecting=断线重连中 / stale=数据可能延迟 */
 const connState = ref<'ok' | 'reconnecting' | 'stale'>('ok')
 
@@ -28,9 +30,11 @@ async function loadAlerts() {
     const items = await fetchTodayAlerts()
     if (seq !== loadSeq) return
     alerts.value = items
+    loadError.value = false
   } catch {
     if (seq !== loadSeq) return
     alerts.value = []
+    loadError.value = true
   } finally {
     if (seq === loadSeq) loading.value = false
   }
@@ -135,7 +139,17 @@ function onDialogHandled() {
           <div class="meta">{{ formatTime(a.time) }}</div>
         </li>
       </ul>
-      <div v-else class="a-empty">{{ loading ? '加载中…' : '暂无今日告警' }}</div>
+      <div
+        v-else
+        class="a-empty"
+        :class="{ retry: loadError }"
+        role="button"
+        tabindex="0"
+        @click="loadError && loadAlerts()"
+        @keydown.enter="loadError && loadAlerts()"
+      >
+        {{ loading ? '加载中…' : loadError ? '加载失败，点击重试' : '暂无今日告警' }}
+      </div>
     </div>
 
     <div class="alert-foot">
@@ -326,6 +340,11 @@ function onDialogHandled() {
   font-size: 13px;
   padding: 8px;
   text-align: center;
+}
+/* 失败重试态：可点击 + 告警色提示 */
+.a-empty.retry {
+  color: var(--danger-text);
+  cursor: pointer;
 }
 
 .alert-foot {

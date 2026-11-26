@@ -231,15 +231,16 @@ export async function fetchUnhandledEvents(): Promise<AlertItem[]> {
   return items
 }
 
-/** §3.5 箱柜分等级历史告警统计（失败降级全 0，弹窗头不阻断） */
-export async function fetchSuperDeviceLevelCounts(superId: number): Promise<SuperDeviceAlarmStats> {
-  if (!superId) return normalizeSuperDeviceAlarmStats(null)
+/** §3.5 箱柜分等级历史告警统计。失败返回 null（调用方显示「统计不可用」，
+ *  2026-11-25 阶段6 用户拍板：不用全 0 冒充真实统计） */
+export async function fetchSuperDeviceLevelCounts(superId: number): Promise<SuperDeviceAlarmStats | null> {
+  if (!superId) return null
   try {
     return normalizeSuperDeviceAlarmStats(
       await eventGet<unknown>(`/event/super-devices/${superId}/level-counts`),
     )
   } catch {
-    return normalizeSuperDeviceAlarmStats(null)
+    return null
   }
 }
 

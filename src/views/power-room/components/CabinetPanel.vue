@@ -24,8 +24,12 @@ const props = defineProps<{
   selectedSwitchName?: string
   measurements: MeasInfo[]
   measLoading: boolean
+  /** 测点加载失败（阶段6）：显示失败文案而非全 0 */
+  measError?: boolean
   history: HistoryAlertRow[]
   historyLoading: boolean
+  /** 历史告警加载失败（阶段6）：显示失败文案而非「暂无」 */
+  historyError?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -94,6 +98,7 @@ function levelTag(eventLevel?: number): { text: string; cls: string } {
         <div class="cp-sec-title">测点数据</div>
         <div class="cp-scroll">
           <div v-if="measLoading" class="cp-empty">测点加载中…</div>
+          <div v-else-if="measError" class="cp-empty cp-error">测点加载失败，重新点该柜重试</div>
           <div v-else class="cp-meas">
             <div v-for="row in panelRows" :key="row.label" class="cp-meas-row">
               <span class="cp-meas-bar" />
@@ -108,6 +113,7 @@ function levelTag(eventLevel?: number): { text: string; cls: string } {
         <div class="cp-sec-title">历史告警（{{ history.length }} 条）</div>
         <div class="cp-scroll">
           <div v-if="historyLoading" class="cp-empty">告警加载中…</div>
+          <div v-else-if="historyError" class="cp-empty cp-error">告警加载失败，重新点该柜重试</div>
           <div v-else-if="!history.length" class="cp-empty">暂无历史告警</div>
           <div v-else class="cp-hist">
             <div v-for="row in history" :key="row.id" class="cp-hist-row">
@@ -203,6 +209,12 @@ function levelTag(eventLevel?: number): { text: string; cls: string } {
   background: rgba(255, 255, 255, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 10px;
+}
+/* 加载失败态（阶段6）：告警色区分于「暂无」 */
+.cp-error {
+  color: var(--danger-text);
+  background: rgba(229, 72, 77, 0.1);
+  border-color: rgba(229, 72, 77, 0.35);
 }
 
 /* 测点数据：彩条行（名称左、数值右，福永点柜面板同款） */

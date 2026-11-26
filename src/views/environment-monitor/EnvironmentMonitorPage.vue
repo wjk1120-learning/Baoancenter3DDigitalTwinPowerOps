@@ -24,6 +24,8 @@ const round = ref(0)
 const cameras = ref<CameraVo[]>([])
 /** 探测中：视频墙盖加载遮罩、刷新按钮禁用 */
 const probing = ref(false)
+/** 台账加载失败（阶段6）：显示失败 + 重试，不用空态冒充 */
+const probeError = ref(false)
 /** 已出画面（首帧确认）台数：加载遮罩上的「N / M 已就绪」进度（2026-11-25 用户定稿） */
 const readyCount = ref(0)
 /** 已判死的摄像头：探测中隐藏、settle 后剔除；播放在途中断流同样隐藏 */
@@ -36,10 +38,11 @@ const playbackCamera = ref<CameraVo | null>(null)
 /** 视频墙名单：探测中=全部候选（被遮罩盖住），探测完=出画面且未中断的 */
 const visibleCameras = computed(() => cameras.value.filter((c) => !brokenIds.value.has(c.id)))
 
-/** 一轮完整探测。台账拉取失败按空态静默收场（§6.1 silent，无全局报错） */
+/** 一轮完整探测。台账拉取失败置 probeError（阶段6）：显示失败 + 重试，不用空态冒充 */
 async function probeAll() {
   const seq = ++round.value
   probing.value = true
+  probeError.value = false
   cameras.value = []
   brokenIds.value = new Set()
   settledIds.clear()
@@ -48,7 +51,10 @@ async function probeAll() {
   try {
     ledger = await fetchCameraList()
   } catch {
-    if (seq === round.value) probing.value = false
+    if (seq === round.value) {
+      probing.value = false
+      probeError.value = true
+    }
     return
   }
   if (seq !== round.value) return
@@ -118,7 +124,7 @@ onActivated(() => {
           @ok="markOk"
           @playback="playbackCamera = $event"
         />
-        <div v-if="!probing && visibleCameras.length === 0" class="em-empty">
+        <div v-if="!probing && !probeError && visibleCameras.length === 0" class="em-empty">
           暂无可用监控画面
         </div>
         <!-- 探测遮罩：盖住墙内建中的播放器，全部 settle 才撤 -->
@@ -126,6 +132,11 @@ onActivated(() => {
           <span class="em-probing-spin" aria-hidden="true" />
           <span class="em-probing-text">监控画面加载中...</span>
           <span class="em-probing-sub">{{ readyCount }} / {{ cameras.length }} 已就绪</span>
+        </div>
+        <!-- 台账加载失败（阶段6）：失败 + 重试 -->
+        <div v-else-if="probeError" class="em-probing">
+          <span class="em-probing-text em-probe-err">监控台账加载失败</span>
+          <button type="button" class="em-retry" @click="probeAll()">重试</button>
         </div>
       </main>
     </div>
@@ -311,6 +322,24 @@ onActivated(() => {
   color: var(--muted);
   font-size: 13px;
   font-family: var(--font-mono);
+}
+/* 台账加载失败态（阶段6）：告警色文字 + 重试钮 */
+.em-probe-err {
+  color: var(--danger-text);
+  letter-spacing: 1px;
+}
+.em-retry {
+  height: 30px;
+  padding: 0 16px;
+  border: 1px solid var(--danger-text);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.em-retry:hover {
+  background: rgba(229, 72, 77, 0.12);
 }
 @keyframes em-spin {
   to {

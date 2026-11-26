@@ -10,6 +10,8 @@ import type { InspectDeviceRecord } from '../../../api/operation/types'
 const props = defineProps<{
   records: InspectDeviceRecord[]
   loading: boolean
+  /** 维护记录加载失败（阶段6）：空态显示失败而非「暂无」 */
+  error?: boolean
   /** 卡片位置行展示用的箱柜名（§4.1 的 superDeviceName 与目录名一致时直接用它） */
   cabinetName: string
 }>()
@@ -122,7 +124,7 @@ function thumbs(rec: InspectDeviceRecord): { url: string; tag: string }[] {
         <rect x="8" y="2" width="8" height="4" rx="1" />
         <path d="M9 14l2 2 4-4" />
       </svg>
-      <span>暂无维护记录</span>
+      <span :class="{ 'me-error': error }">{{ error ? '维护记录加载失败' : '暂无维护记录' }}</span>
     </div>
   </div>
 </template>
@@ -309,6 +311,10 @@ function thumbs(rec: InspectDeviceRecord): { url: string; tag: string }[] {
   gap: 8px;
   font-size: 15px;
   color: var(--muted);
+}
+/* 加载失败态（阶段6）：告警色区分于「暂无」 */
+.me-error {
+  color: var(--danger-text);
 }
 .me-icon {
   width: 38px;
