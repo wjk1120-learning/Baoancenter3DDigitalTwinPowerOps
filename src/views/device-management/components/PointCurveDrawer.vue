@@ -44,6 +44,12 @@ const UNIT_BY_CODE: Record<string, string> = {
 function unitOf(code: string): string {
   return UNIT_BY_CODE[code] ?? ''
 }
+/** 同义测点名兜底（2026-11-26 用户补充）：部分设备无 Pfs 只有 Pfsum（同为总功率因数），
+ *  字典行 Pfs 的实时值按 typeCode → typeName → 同义名 匹配 */
+const NAME_FALLBACK: Record<string, string> = {
+  Pfs: 'Pfsum',
+}
+
 const params = ref<CetDataType[]>([])
 const dictLoading = ref(false)
 const dictError = ref(false)
@@ -77,8 +83,12 @@ const filteredRows = computed<Row[]>(() => {
       unit: unitOf(p.typeCode),
       // 双向兼容匹配（2026-11-25 联调实测：后端测点命名两套并存——CET 直采电表为英文
       // 代码 Ia/Ua（与字典 typeCode 同体系），部分设备为中文名「A相电流」（与字典
-      // typeName 同体系）——按 code 优先、typeName 兜底，两套都能命中。
-      value: measMap.value[p.typeCode] ?? measMap.value[p.typeName] ?? null,
+      // typeName 同体系）——按 code 优先、typeName 兜底，再接同义名（Pfs→Pfsum）。
+      value:
+        measMap.value[p.typeCode] ??
+        measMap.value[p.typeName] ??
+        (NAME_FALLBACK[p.typeCode] ? measMap.value[NAME_FALLBACK[p.typeCode]] : undefined) ??
+        null,
       checked: checkedCodes.value.includes(p.typeCode),
     }))
 })
@@ -90,9 +100,8 @@ const checkedParams = computed<CetDataType[]>(() =>
 
 function formatVal(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return '暂无'
-  const abs = Math.abs(v)
-  if (abs >= 100) return v.toFixed(1)
-  return String(Number(v.toFixed(2)))
+  // §1.11 实时值统一两位小数（2026-11-26 用户定稿：四舍五入，不再按数值大小省略位数）
+  return v.toFixed(2)
 }
 
 function rowTip(row: Row): string {

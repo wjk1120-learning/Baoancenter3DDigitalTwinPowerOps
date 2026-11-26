@@ -38,14 +38,15 @@ const emit = defineEmits<{
 
 /** 看板固定六项（2026-11-25 用户定稿，对齐参考稿）：标签含单位；
  *  names = measName 匹配候选——后端两套命名并存（CET 英文代码 / 部分设备中文名），
- *  代码优先、中文名兜底（与抽屉/六仪表面板同口径）；缺测默认 0 */
+ *  代码优先、中文名兜底（与抽屉/六仪表面板同口径）；缺测默认 0。
+ *  功率因数（2026-11-26 用户补充）：部分设备无 Pfs 只有 Pfsum → Pfs→Pfsum→中文名 */
 const PANEL_POINTS: { label: string; names: string[] }[] = [
   { label: 'Ia(A)', names: ['Ia', 'A相电流'] },
   { label: 'Ib(A)', names: ['Ib', 'B相电流'] },
   { label: 'Ic(A)', names: ['Ic', 'C相电流'] },
   { label: 'P(kW)', names: ['Psum', '总有功功率'] },
   { label: 'Q(kvar)', names: ['Qsum', '总无功功率'] },
-  { label: 'COS', names: ['Pfs', '功率因数'] },
+  { label: 'COS', names: ['Pfs', 'Pfsum', '功率因数'] },
 ]
 
 /** 六项行：按 names 依次匹配测点值，全部缺测补 0 */
@@ -65,9 +66,8 @@ const panelRows = computed(() =>
 
 function formatMeas(v: number): string {
   if (!Number.isFinite(v)) return '—'
-  const abs = Math.abs(v)
-  if (abs >= 100) return v.toFixed(1)
-  return String(Number(v.toFixed(2)))
+  // §1.11 实时值统一两位小数（2026-11-26 用户定稿：四舍五入，不再按数值大小省略位数）
+  return v.toFixed(2)
 }
 
 /** 历史告警时间展示：MM-DD HH:mm */
