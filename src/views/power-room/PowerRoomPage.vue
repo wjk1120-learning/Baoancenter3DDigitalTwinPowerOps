@@ -27,7 +27,8 @@ defineOptions({ name: 'PowerRoomPage' })
 const { pitch, rooms } = config as PowerRoomsFile
 
 const containerRef = ref<HTMLElement | null>(null)
-const currentId = ref('room-1')
+/** 默认进第一间房（不硬编码房 id，换采集表后 id 变化也不受影响） */
+const currentId = ref(rooms[0]?.id ?? '')
 let scene: ReturnType<typeof createPowerRoomScene> | null = null
 
 const pageTabs = usePageTabsStore()
@@ -194,7 +195,7 @@ onMounted(() => {
   if (!containerRef.value) return
   // 引擎常驻：渲染器/相机/灯光只建一次，切房走 setRoom（模型模板也跨房缓存）
   scene = createPowerRoomScene(containerRef.value, pitch, { modelDir: CABINET_MODEL_DIR, onCabinetClick })
-  mountRoom('room-1')
+  mountRoom(rooms[0]?.id ?? '')
   // §1.3 后台拉取：拿到 switchingId 后预热默认房 §1.6
   void loadSwitchings()
 })

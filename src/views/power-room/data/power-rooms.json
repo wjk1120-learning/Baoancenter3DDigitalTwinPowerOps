@@ -1,10 +1,10 @@
 {
-  "$comment": "配电房图纸配置。数据 = 福永运行时模板 circuit:g2（LV2+LV2_AA9 合并，见对拍 fixtures/layout-g2.expected.json），devCode 为台账真实值。校验：node scripts/check-power-rooms.mjs",
+  "$comment": "配电房图纸配置。数据 = 宝安现场采集表（docs/宝安配电房摆柜信息采集表.xlsx，2026-11-26 转换），6 房 31 柜全部带台账编号（devCode=后端 deviceNumber，§1.6 点柜绑定键），房名与后端 switchingName 逐字一致。校验：node scripts/check-power-rooms.mjs",
   "pitch": 1.32,
   "rooms": [
     {
       "id": "room-1",
-      "name": "1#变低压配电房",
+      "name": "1#变",
       "rows": [
         [
           {
@@ -17,212 +17,241 @@
         [
           {
             "code": "P02/T1",
-            "name": "P02/T1 电容柜",
+            "name": "P02/T1 电容补偿柜",
             "model": "dianrongui",
             "devCode": "BZ000022"
           },
           {
             "code": "P04/T1",
-            "name": "P04/T1 配电柜",
-            "model": "peidiangui"
+            "name": "P04/T1 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000024"
           },
           {
             "code": "P05/T1",
-            "name": "P05/T1 配电柜",
-            "model": "peidiangui"
+            "name": "P05/T1 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000025"
           }
         ],
         [
           {
             "code": "P06/T1",
-            "name": "P06/T1 配电柜",
-            "model": "peidiangui"
+            "name": "P06/T1 联络柜",
+            "model": "jinxian",
+            "devCode": "BZ000026"
           }
         ]
       ]
     },
     {
       "id": "room-2",
-      "name": "2#变低压配电房",
+      "name": "2#变",
       "rows": [
         [
           {
             "code": "P11/T2",
-            "name": "P11/T2 配电柜",
-            "model": "peidiangui"
+            "name": "P11/T2 进线柜",
+            "model": "jinxian",
+            "devCode": "BZ000028"
           }
         ],
         [
           {
             "code": "P10/T2",
-            "name": "P10/T2 配电柜",
-            "model": "peidiangui"
+            "name": "P10/T2 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000029"
           },
           {
             "code": "P08/T2",
-            "name": "P08/T2 配电柜",
-            "model": "peidiangui"
+            "name": "P08/T2 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000031"
           },
           {
             "code": "P07/T2",
-            "name": "P07/T2 配电柜",
-            "model": "peidiangui"
+            "name": "P07/T2 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000032"
           }
         ]
       ]
     },
     {
       "id": "room-3",
-      "name": "3#变低压配电房",
+      "name": "3#变",
       "rows": [
         [
           {
             "code": "P01/T3",
             "name": "P01/T3 进线柜",
-            "model": "jinxian"
+            "model": "jinxian",
+            "devCode": "BZ000036"
           }
         ],
         [
           {
             "code": "P02/T3",
-            "name": "P02/T3 电容柜",
-            "model": "dianrongui"
+            "name": "P02/T3 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000037"
           },
           {
             "code": "P04/T3",
-            "name": "P04/T3 配电柜",
-            "model": "peidiangui"
+            "name": "P04/T3 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000039"
           },
           {
             "code": "P05/T3",
-            "name": "P05/T3 配电柜",
-            "model": "peidiangui"
+            "name": "P05/T3 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000040"
           }
         ],
         [
           {
             "code": "P06/T3",
-            "name": "P06/T3 配电柜",
-            "model": "peidiangui"
+            "name": "P06/T3 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000041"
           },
           {
             "code": "P07/T3",
-            "name": "P07/T3 配电柜",
-            "model": "peidiangui"
+            "name": "P07/T3 联络柜",
+            "model": "jinxian",
+            "devCode": "BZ000042"
           }
         ]
       ]
     },
     {
       "id": "room-4",
-      "name": "4#变低压配电房",
+      "name": "4#变",
       "rows": [
         [
           {
             "code": "P01/T4",
             "name": "P01/T4 进线柜",
-            "model": "jinxian"
+            "model": "jinxian",
+            "devCode": "BZ000044"
           }
         ],
         [
           {
             "code": "P02/T4",
-            "name": "P02/T4 电容柜",
-            "model": "dianrongui"
+            "name": "P02/T4 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000045"
           },
           {
             "code": "P04/T4",
-            "name": "P04/T4 配电柜",
-            "model": "peidiangui"
+            "name": "P04/T4 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000047"
           }
         ]
       ]
     },
     {
       "id": "room-5",
-      "name": "5#变低压配电房",
+      "name": "5#变",
       "rows": [
         [
           {
             "code": "1P01",
             "name": "1P01 进线柜",
-            "model": "jinxian"
+            "model": "jinxian",
+            "devCode": "BZ000059"
           }
         ],
         [
           {
             "code": "1P02",
-            "name": "1P02 电容柜",
-            "model": "dianrongui"
+            "name": "1P02 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000060"
           },
           {
             "code": "1P03",
-            "name": "1P03 配电柜",
-            "model": "peidiangui"
+            "name": "1P03 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000062"
           },
           {
             "code": "1P04",
-            "name": "1P04 配电柜",
-            "model": "peidiangui"
+            "name": "1P04 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000063"
           }
         ],
         [
           {
             "code": "1P05",
-            "name": "1P05 配电柜",
-            "model": "peidiangui"
+            "name": "1P05 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000064"
           },
           {
             "code": "1P06",
-            "name": "1P06 配电柜",
-            "model": "peidiangui"
+            "name": "1P06 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000065"
           }
         ]
       ]
     },
     {
       "id": "room-6",
-      "name": "6#变低压配电房",
+      "name": "6#变",
       "rows": [
         [
           {
-            "code": "P01/T4",
-            "name": "P01/T4 进线柜",
-            "model": "jinxian"
+            "code": "2P01",
+            "name": "2P01 进线柜",
+            "model": "jinxian",
+            "devCode": "BZ000069"
           }
         ],
         [
           {
             "code": "2P03",
-            "name": "2P03 电容柜",
-            "model": "dianrongui"
+            "name": "2P03 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000071"
           },
           {
             "code": "2P04",
-            "name": "2P04 配电柜",
-            "model": "peidiangui"
+            "name": "2P04 电容补偿柜",
+            "model": "dianrongui",
+            "devCode": "BZ000072"
           },
           {
             "code": "2P05",
-            "name": "2P05 配电柜",
-            "model": "peidiangui"
+            "name": "2P05 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000073"
           },
           {
             "code": "2P06",
-            "name": "2P06 配电柜",
-            "model": "peidiangui"
+            "name": "2P06 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000074"
           }
         ],
         [
           {
             "code": "2P07",
-            "name": "2P07 配电柜",
-            "model": "peidiangui"
+            "name": "2P07 馈线柜",
+            "model": "jinxian",
+            "devCode": "BZ000075"
           },
           {
-            "code": "P06",
-            "name": "P06 配电柜",
-            "model": "peidiangui"
+            "code": "2P08",
+            "name": "2P08 联络柜",
+            "model": "jinxian",
+            "devCode": "BZ000076"
           }
         ]
       ]

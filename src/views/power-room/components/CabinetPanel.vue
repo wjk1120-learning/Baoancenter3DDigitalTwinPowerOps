@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { MeasInfo } from '../../../api/device/types'
 import type { HistoryAlertRow } from '../../../api/hospital/types'
 
@@ -7,6 +8,7 @@ import type { HistoryAlertRow } from '../../../api/hospital/types'
  * 全高宽面板：柜名+编号 → 测点数据（§1.11 按选中开关）→ 历史告警（§3.3 全量滚动，
  * 等级 tag 按宝中口径：紧急红/严重橙/一般蓝/提醒灰）→ 「查看柜体详情」按钮。
  * 当前告警模块不保留（用户定稿）。
+ * 测点区只展示固定六项指标（2026-11-25 用户定稿：Ia/Ib/Ic/P/Q/COS，缺测默认 0）。
  */
 
 interface SelectedCabinet {
@@ -16,7 +18,7 @@ interface SelectedCabinet {
   superId?: number
 }
 
-defineProps<{
+const props = defineProps<{
   cabinet: SelectedCabinet | null
   /** 当前选中开关的名称（§1.8 deviceName），头部标题展示用 */
   selectedSwitchName?: string
@@ -30,16 +32,32 @@ const emit = defineEmits<{
   'view-detail': []
 }>()
 
-/** 测点单位推断（电压 V / 电流 A / 温度 ℃ / 功率 kW / 功率因数、COS 无单位） */
-function measUnit(name: string): string {
-  const n = name.trim()
-  if (/电压/.test(n) || /^u[abc]\d*$/i.test(n)) return ' V'
-  if (/电流/.test(n) || /^i[abc]\d*$/i.test(n)) return ' A'
-  if (/温度/.test(n)) return ' ℃'
-  if (/有功/.test(n)) return ' kW'
-  if (/无功/.test(n)) return ' kvar'
-  return ''
-}
+/** 看板固定六项（2026-11-25 用户定稿，对齐参考稿）：标签含单位；
+ *  names = measName 匹配候选——后端两套命名并存（CET 英文代码 / 部分设备中文名），
+ *  代码优先、中文名兜底（与抽屉/六仪表面板同口径）；缺测默认 0 */
+const PANEL_POINTS: { label: string; names: string[] }[] = [
+  { label: 'Ia(A)', names: ['Ia', 'A相电流'] },
+  { label: 'Ib(A)', names: ['Ib', 'B相电流'] },
+  { label: 'Ic(A)', names: ['Ic', 'C相电流'] },
+  { label: 'P(kW)', names: ['Psum', '总有功功率'] },
+  { label: 'Q(kvar)', names: ['Qsum', '总无功功率'] },
+  { label: 'COS', names: ['Pfs', '功率因数'] },
+]
+
+/** 六项行：按 names 依次匹配测点值，全部缺测补 0 */
+const panelRows = computed(() =>
+  PANEL_POINTS.map((p) => {
+    let value = 0
+    for (const n of p.names) {
+      const hit = props.measurements.find((m) => m.measName === n)
+      if (hit && Number.isFinite(hit.measVal)) {
+        value = hit.measVal
+        break
+      }
+    }
+    return { label: p.label, value: formatMeas(value) }
+  }),
+)
 
 function formatMeas(v: number): string {
   if (!Number.isFinite(v)) return '—'
@@ -76,12 +94,11 @@ function levelTag(eventLevel?: number): { text: string; cls: string } {
         <div class="cp-sec-title">测点数据</div>
         <div class="cp-scroll">
           <div v-if="measLoading" class="cp-empty">测点加载中…</div>
-          <div v-else-if="!measurements.length" class="cp-empty">暂无测点数据</div>
           <div v-else class="cp-meas">
-            <div v-for="m in measurements" :key="m.measID" class="cp-meas-row">
+            <div v-for="row in panelRows" :key="row.label" class="cp-meas-row">
               <span class="cp-meas-bar" />
-              <span class="cp-meas-k" :title="m.measName">{{ m.measName }}</span>
-              <span class="cp-meas-v mono">{{ formatMeas(m.measVal) }}{{ measUnit(m.measName) }}</span>
+              <span class="cp-meas-k">{{ row.label }}</span>
+              <span class="cp-meas-v mono">{{ row.value }}</span>
             </div>
           </div>
         </div>

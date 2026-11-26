@@ -15,7 +15,15 @@ export const CABINET_HEIGHT = 2.2
 
 // BASE_URL 前缀跟随 vite base（/baozhongTwin/），域名根绝对路径在带前缀部署下会 404。
 // 模型目录由调用方注入（复用约定：医院变量不进引擎，见 views/power-room/config.ts）
-const MODEL_URL = (modelDir: string, m: string) => `${import.meta.env.BASE_URL}${modelDir}/${m}.glb`
+const MODEL_URL = (modelDir: string, m: string) =>
+  `${import.meta.env.BASE_URL}${modelDir}/${FILE_NAME_ALIAS[m] ?? m}.glb`
+
+/** 模型名 → GLB 文件名别名：宝安双电源切换柜模型文件为现场素材原名拼写
+ *  shaungdianyaun.glb（历史笔误，非本枚举的 shuangdianyuan）——不做别名会在
+ *  转换采集表出现双电源柜时静默 404 缺柜（2026-11-26 预埋，现场暂无该柜型） */
+const FILE_NAME_ALIAS: Record<string, string> = {
+  shuangdianyuan: 'shaungdianyaun',
+}
 
 const draco = new DRACOLoader()
 draco.setDecoderPath('/draco/')
