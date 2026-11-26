@@ -146,12 +146,15 @@ watch([fullscreen, selectedId], syncFloorCallouts)
 // ---- 数据联动：楼名 kWh + 告警楼层亮灯/染色 ----
 const NAME_TO_ID = new Map(CAMPUS_BUILDINGS.map((b) => [b.name, b.id]))
 
-/** §2.1 → 楼名 kWh（10 分钟轮询；楼名键 → buildingId 映射） */
+/** §2.1 → 楼名 kWh（10 分钟轮询；楼名键 → buildingId 映射）。
+ *  成功但某楼无统计行（滚动滞后/未配置，阶段6 后用户口径：空≠故障）→ 该楼按 0 展示；
+ *  接口失败保持旧标签不清空 */
 async function refreshEnergy() {
   if (!scene) return
   const today = await fetchEnergyToday().catch(() => null)
   if (!today) return
   const kwhById = new Map<number, number>()
+  for (const b of CAMPUS_BUILDINGS) kwhById.set(b.id, 0)
   for (const [name, stat] of Object.entries(today.buildingStats)) {
     const id = NAME_TO_ID.get(name)
     if (id != null) kwhById.set(id, stat.energyKwh)

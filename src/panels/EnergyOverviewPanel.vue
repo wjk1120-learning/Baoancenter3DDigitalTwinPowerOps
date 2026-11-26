@@ -13,6 +13,9 @@ import type { EnergyDailyStats, EnergyTodayStats } from '../api/energy/types'
  */
 const todayStats = ref<EnergyTodayStats | null>(null)
 const yesterdayList = ref<EnergyDailyStats[]>([])
+/** 昨日接口失败标记（2026-11-26 用户拍板）：失败 → '--'；成功但空列表 → 显示 0
+ *  （空列表 = 后端昨日无统计行，不是接口故障） */
+const yesterdayFail = ref(false)
 const deviceCount = ref<number | null>(null)
 
 const ENERGY_POLL_MS = 10 * 60 * 1000
@@ -21,11 +24,12 @@ let pollTimer: number | null = null
 async function load() {
   const [today, yesterday, count] = await Promise.all([
     fetchEnergyToday().catch(() => null),
-    fetchEnergyYesterday().catch(() => [] as EnergyDailyStats[]),
+    fetchEnergyYesterday().catch(() => null),
     fetchDeviceCount().catch(() => null),
   ])
   todayStats.value = today
-  yesterdayList.value = yesterday
+  yesterdayList.value = yesterday ?? []
+  yesterdayFail.value = yesterday == null
   deviceCount.value = count
 }
 
@@ -49,7 +53,7 @@ onUnmounted(stopPoll)
 /** 全院今日用电/碳排：优先取 buildingStats 的「全院」键（后端权威合计，2026-11-16 真实样例
  *  确认该键存在且可能不等于楼栋求和）；缺失时回退"跳过全院键的楼栋求和"。 */
 const CAMPUS_KEY = '全院'
-function campusStatOf(s: EnergyTodayStats, field: 'energyKwh' | 'carbonKg'): number | null {
+function campusStatOf(s: EnergyTodayStats, field: 'energyKwh' | 'carbonKg'): number {
   const campus = s.buildingStats[CAMPUS_KEY]
   if (campus && typeof campus[field] === 'number') return campus[field] as number
   let sum = 0
@@ -62,7 +66,8 @@ function campusStatOf(s: EnergyTodayStats, field: 'energyKwh' | 'carbonKg'): num
       has = true
     }
   }
-  return has ? sum : null
+  // 成功但 buildingStats 为空/无数值行 → 0（2026-11-26 用户口径：空≠故障，故障才 '--'）
+  return has ? sum : 0
 }
 const sumTodayKwh = computed<number | null>(() => {
   const s = todayStats.value
@@ -74,8 +79,13 @@ const sumTodayCarbonKg = computed<number | null>(() => {
   if (!s) return null
   return campusStatOf(s, 'carbonKg')
 })
-const yesterdayKwh = computed(() => yesterdayList.value[0]?.energyKwh ?? null)
-const yesterdayCarbonKg = computed(() => yesterdayList.value[0]?.carbonKg ?? null)
+/** 昨日值：接口失败 → null（'--'）；成功但空列表 → 0（2026-11-26 用户拍板口径） */
+const yesterdayKwh = computed(() =>
+  yesterdayFail.value ? null : yesterdayList.value[0]?.energyKwh ?? 0,
+)
+const yesterdayCarbonKg = computed(() =>
+  yesterdayFail.value ? null : yesterdayList.value[0]?.carbonKg ?? 0,
+)
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US')
 

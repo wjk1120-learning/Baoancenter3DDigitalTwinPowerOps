@@ -57,17 +57,11 @@ const MEAS_POINTS: { code: string; label: string }[] = [
 ]
 const displayPoints = computed(() => {
   const pts = readings.value ?? []
-  // 缺测（阶段6）：missing=true → 仪表盘位置显示「—」，不用 0 冒充真实读数
-  const findVal = (code: string, label: string): { value: number; missing: boolean } => {
-    const hit = pts.find((p) => p.name === code) ?? pts.find((p) => p.name === label)
-    if (hit && Number.isFinite(hit.value)) return { value: hit.value, missing: false }
-    return { value: 0, missing: true }
-  }
+  // 缺测（接口返回里没有该相测点）→ 默认 0（2026-11-26 用户口径，与点柜看板六项一致）
+  const findVal = (code: string, label: string): number =>
+    pts.find((p) => p.name === code)?.value ?? pts.find((p) => p.name === label)?.value ?? 0
   return readings.value
-    ? MEAS_POINTS.map(({ code, label }) => {
-        const r = findVal(code, label)
-        return { name: label, value: r.value, missing: r.missing }
-      })
+    ? MEAS_POINTS.map(({ code, label }) => ({ name: label, value: findVal(code, label) }))
     : []
 })
 
@@ -354,14 +348,8 @@ const pendingHint = computed(() => {
 
     <div v-if="displayPoints.length && !readingPending" class="gauges">
       <div v-for="p in displayPoints" :key="p.name" class="gauge-box">
-        <template v-if="p.missing">
-          <div class="gauge-na">—</div>
-          <span class="g-name">{{ p.name }}</span>
-        </template>
-        <template v-else>
-          <BaseChart :option="pointGaugeOption(p)" />
-          <span class="g-name" :title="p.name">{{ p.name }}</span>
-        </template>
+        <BaseChart :option="pointGaugeOption(p)" />
+        <span class="g-name" :title="p.name">{{ p.name }}</span>
       </div>
     </div>
   </div>
@@ -411,16 +399,6 @@ const pendingHint = computed(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
-}
-/* 缺测占位（阶段6）：与仪表盘同位显示「—」 */
-.gauge-na {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 22px;
 }
 .g-name {
   flex: none;

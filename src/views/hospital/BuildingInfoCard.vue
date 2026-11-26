@@ -70,29 +70,32 @@ watch(
         fetchBuildingDailyAlarms(id, floor).catch(() => []),
       ])
       if (s !== seq || props.buildingId !== id || props.floor !== floor) return
-      // §2.7 全部设备无读数时 energyKwh=null → 显示「—」（区分「无设备=0」）
-      todayKwh.value = today?.energyKwh ?? null
+      // §2.7 后端以 energyKwh=null 表示全部设备无读数——按 2026-11-26 用户口径显示 0，
+      // 接口失败（today 为 null）才显示「—」
+      todayKwh.value = today == null ? null : today.energyKwh ?? 0
       carbonT.value =
-        today?.carbonKg != null ? Math.round((today.carbonKg / 1000) * 100) / 100 : null
+        today?.carbonKg != null ? Math.round((today.carbonKg / 1000) * 100) / 100 : 0
       alarmCount.value = cnt
       yesterdayKwh.value = yest?.energyKwh ?? null
       energyTrend.value = hist
       alarmTrend.value = alarms
     } else {
       // 楼栋模式：§2.1 全量取本楼行 + §2.2 昨日 + §3.7 + §2.3 + §3.8
+      // §2.2 失败 catch 置 null（'—'）；成功但空列表 → 0（2026-11-26 用户拍板口径）
       const [today, yest, cnt, hist, alarms] = await Promise.all([
         fetchEnergyToday().catch(() => null),
-        fetchEnergyYesterday(id).catch(() => []),
+        fetchEnergyYesterday(id).catch(() => null),
         fetchBuildingCurrentAlarmCount(id).catch(() => null),
         fetchBuildingEnergyHistory(id).catch(() => []),
         fetchBuildingDailyAlarms(id).catch(() => []),
       ])
       if (s !== seq || props.buildingId !== id || props.floor != null) return
       const row = today?.buildingStats?.[props.buildingName]
-      todayKwh.value = row ? row.energyKwh : null
-      carbonT.value = row ? Math.round((row.carbonKg / 1000) * 100) / 100 : null
+      // 成功但本楼行缺失 → 0（2026-11-26 用户口径）；接口失败才显示「—」
+      todayKwh.value = row ? row.energyKwh : 0
+      carbonT.value = row ? Math.round((row.carbonKg / 1000) * 100) / 100 : 0
       alarmCount.value = cnt
-      yesterdayKwh.value = yest[0]?.energyKwh ?? null
+      yesterdayKwh.value = yest == null ? null : yest[0]?.energyKwh ?? 0
       energyTrend.value = hist
       alarmTrend.value = alarms
     }
